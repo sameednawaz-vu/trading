@@ -4,8 +4,13 @@ import os
 import time
 
 def fetch_data():
-    exchange = ccxt.binance()
-    symbols = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT']
+    exchange = ccxt.kraken()
+    symbols = [
+        'ADA/USDT', 'AI16Z/USDT', 'ALEO/USDT', 'ALGO/USDT', 'APE/USDT',
+        'ATOM/USDT', 'AVAX/USDT', 'BCH/USDT', 'BERA/USDT', 'BNB/USDT',
+        'BTC/USDT', 'CC/USDT', 'CRO/USDT', 'DAI/USDT', 'DOGE/USDT',
+        'DOT/USDT', 'ETH/USDT', 'EURR/USDT', 'FARTCOIN/USDT', 'FIDD/USDT'
+    ]
     timeframes = ['3m', '5m', '15m', '30m', '1h']
 
     os.makedirs('data', exist_ok=True)
@@ -14,9 +19,16 @@ def fetch_data():
         for timeframe in timeframes:
             print(f"Fetching {symbol} at {timeframe}")
             try:
-                # Binance rate limits are generous but it's good to pause
-                time.sleep(0.5)
-                data = exchange.fetch_ohlcv(symbol, timeframe, limit=1000)
+                # Add delay to avoid rate limiting
+                time.sleep(1.0)
+
+                # Different exchanges handle timeframes differently. ccxt abstracts it but limits vary
+                data = exchange.fetch_ohlcv(symbol, timeframe, limit=500)
+
+                if not data:
+                    print(f"No data returned for {symbol} {timeframe}")
+                    continue
+
                 df = pd.DataFrame(data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
                 df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
 
