@@ -102,6 +102,7 @@ class Backtester:
                         bias = self.engine.get_bias(window_df)
                         kz = self.engine.is_killzone(current_time)
                     except Exception as e:
+                        print(f"SMC Error: {e}")
                         # smc library might fail if not enough variation
                         continue
 
@@ -115,6 +116,25 @@ class Backtester:
                     if not features['ob'].empty:
                         last_ob = features['ob'].iloc[-1]
                         recent_ob = last_ob.to_dict()
+
+
+                    # Pre-filter to save API calls: only query LLM if there's a recent OB or FVG
+                    if recent_fvg.get('FVG', 0) == 0 and recent_ob.get('OB', 0) == 0:
+                        continue
+
+                    # Check if the FVG/OB signal is active in the last 3 candles
+                    fvg_active = recent_fvg.get('FVG', 0) != 0
+                    ob_active = recent_ob.get('OB', 0) != 0
+
+                    if not fvg_active and not ob_active:
+                        continue
+
+
+                    # Only hit LLM on NEW signals
+                    current_sig = f"{recent_fvg.get('FVG', 0)}_{recent_ob.get('OB', 0)}_{current_price}"
+                    if hasattr(self, 'last_sig') and self.last_sig == current_sig:
+                        continue
+                    self.last_sig = current_sig
 
                     market_data = {
                         "price": current_price,
@@ -148,7 +168,8 @@ class Backtester:
 
                             # API Rate limits mitigation
                             # time.sleep(2)  # removed sleep to speed up backtest
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as e:
+                        print(f"JSON Error: {e} - Res: {res_json}")
                         pass
 
 if __name__ == "__main__":
@@ -156,4 +177,5 @@ if __name__ == "__main__":
     # Test on a single symbol/tf first to verify
 
 
-    bt.run()
+    print('Starting backtest run...')
+    bt.run(symbols=['BTC/USDT'], timeframes=['15m'])

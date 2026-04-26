@@ -43,7 +43,7 @@ class Optimizer:
             bt = Backtester(rules_context=rules_context)
             # Run on a smaller subset for speed during dev:
             # BTC and ETH on 15m.
-            bt.run(symbols=['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT'], timeframes=['3m', '5m', '15m', '30m', '1h'])
+            bt.run(symbols=['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'DOGE/USDT', 'AVAX/USDT', 'LINK/USDT', 'MATIC/USDT', 'DOT/USDT', 'TRX/USDT', 'LTC/USDT', 'SHIB/USDT', 'UNI/USDT', 'ATOM/USDT', 'XMR/USDT', 'ETC/USDT', 'TON/USDT', 'ALGO/USDT'], timeframes=['15m', '1h'])
 
             # Evaluate
             win_rate, total_trades = self.get_win_rate()
