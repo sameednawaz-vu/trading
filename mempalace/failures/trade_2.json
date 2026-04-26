@@ -1,0 +1,13 @@
+{
+    "trade": {
+        "symbol": "BTC/USDT",
+        "timeframe": "15m",
+        "side": "Short",
+        "entry_price": 68903.59,
+        "stop_loss": 68869.31,
+        "take_profit": 68813.29000000002,
+        "position_size": 2.887981330221802,
+        "id": 2
+    },
+    "reflection": "FALLBACK_REQUESTED: Please check gemini_fallback_queue.json"
+}
