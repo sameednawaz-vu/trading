@@ -10,7 +10,7 @@ class DataIngestor:
         self.exchange = getattr(ccxt, exchange_id)({
             'enableRateLimit': True,
         })
-        self.data_path = 'E:/TRADING/data'
+        self.data_path = './data'
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
 
@@ -76,11 +76,11 @@ if __name__ == "__main__":
     # Fetching 1 year of data: April 2025 back to April 2024 (Simulated context date is April 2026, so 2025-2026)
     # Actually, current session context says date is April 25, 2026.
     # So "last year" is April 2025 to April 2026.
-    start = "2025-04-01T00:00:00Z"
-    end = "2026-04-25T00:00:00Z"
+    start = "2023-04-01T00:00:00Z"
+    end = "2024-04-25T00:00:00Z"
     
-    symbols = ['BTC/USDT', 'ETH/USDT'] # Start with top 2 to manage disk/time
-    timeframes = ['1h', '5m'] # Necessary for Bias + Execution
+    symbols = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT'] # Start with top 2 to manage disk/time
+    timeframes = ['3m', '5m', '15m', '30m', '1h'] # Necessary for Bias + Execution
     
     for symbol in symbols:
         for tf in timeframes:
