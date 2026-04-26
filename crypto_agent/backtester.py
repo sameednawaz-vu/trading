@@ -5,14 +5,14 @@ from crypto_agent.ict_logic import apply_ict_concepts
 from crypto_agent.agent import TradingAgent
 
 class Backtester:
-    def __init__(self, data_path="data/*.csv"):
+    def __init__(self, data_path="data/*.csv", backtest_days=7):
         self.files = glob.glob(data_path)
         self.agent = TradingAgent()
         self.trades = []
         self.active_trade = None
+        self.backtest_days = backtest_days
 
     def format_setup(self, df_slice, current_row):
-        # Prepare context for the agent
         recent_candles = df_slice[['timestamp', 'open', 'high', 'low', 'close']].tail(5).to_string(index=False)
 
         fvg_data = []
@@ -29,7 +29,6 @@ class Backtester:
         print(f"Found {len(self.files)} files for backtesting.")
 
         for file in self.files:
-            # Parse symbol and timeframe from filename (e.g. data/BTC_USDT_15m.csv)
             parts = file.replace('data/', '').replace('.csv', '').split('_')
             symbol = f"{parts[0]}/{parts[1]}"
             timeframe = parts[2] if len(parts) > 2 else "unknown"
@@ -38,7 +37,6 @@ class Backtester:
             df = pd.read_csv(file)
             df = apply_ict_concepts(df)
 
-            # Start from index 20 to have enough history
             end_idx = min(len(df), 20 + limit_per_file)
 
             for i in range(20, end_idx):
@@ -71,9 +69,7 @@ class Backtester:
                             self.active_trade = None
                     continue
 
-                # Filter: Only query LLM if there's an ICT signal to save API calls
                 if current_row['fvg_bullish'] or current_row['fvg_bearish'] or current_row['ob_bullish'] or current_row['ob_bearish']:
-
                     df_slice = df.iloc[i-5:i+1]
                     recent_candles, fvg, ob = self.format_setup(df_slice, current_row)
 
@@ -82,7 +78,6 @@ class Backtester:
                     )
 
                     if decision.get('action') in ['BUY', 'SELL']:
-                        # Validate risk/reward
                         entry = decision.get('entry_price', current_price)
                         sl = decision.get('stop_loss')
                         tp = decision.get('take_profit')
@@ -90,7 +85,7 @@ class Backtester:
                         if sl and tp:
                             risk = abs(entry - sl)
                             reward = abs(tp - entry)
-                            if risk > 0 and (reward / risk) >= 1.8: # Allowing slight leniency for float math
+                            if risk > 0 and (reward / risk) >= 1.8:
                                 print(f"[{current_row['timestamp']}] Executing {decision['action']} on {symbol} at {entry}. R/R: {reward/risk:.2f}")
                                 self.active_trade = {
                                     'timestamp': current_row['timestamp'],
@@ -100,27 +95,47 @@ class Backtester:
                                     'entry_price': entry,
                                     'stop_loss': sl,
                                     'take_profit': tp,
+                                    'risk_reward_ratio': reward/risk,
                                     'reasoning': decision.get('reasoning', ''),
                                     'status': 'OPEN'
                                 }
 
-        self.print_results()
+        return self.generate_report()
 
-    def print_results(self):
-        print("\n--- Backtest Results ---")
+    def generate_report(self):
+        print("\n" + "="*50)
+        print("          COMPREHENSIVE BACKTEST REPORT")
+        print("="*50)
+
         wins = len([t for t in self.trades if t['status'] == 'WIN'])
         losses = len([t for t in self.trades if t['status'] == 'LOSS'])
         total = wins + losses
         win_rate = (wins / total * 100) if total > 0 else 0
 
-        print(f"Total Trades: {total}")
-        print(f"Wins: {wins}")
-        print(f"Losses: {losses}")
-        print(f"Win Rate: {win_rate:.2f}%")
+        if total > 0:
+            avg_rr = sum(t['risk_reward_ratio'] for t in self.trades) / total
+        else:
+            avg_rr = 0.0
+
+        # Extrapolate to monthly (assuming 30 days in a month)
+        monthly_multiplier = 30 / self.backtest_days
+        extrapolated_monthly_trades = total * monthly_multiplier
+
+        print(f"Total Completed Trades: {total}")
+        print(f"Winning Trades: {wins}")
+        print(f"Losing Trades: {losses}")
+        print(f"Success Rate: {win_rate:.2f}%")
+        print(f"Average Risk/Reward Ratio: 1:{avg_rr:.2f}")
+        print(f"Estimated Monthly Trades: {extrapolated_monthly_trades:.1f}")
+        print("="*50 + "\n")
 
         if self.active_trade:
-            print("1 trade currently OPEN.")
+            print(f"Note: 1 trade currently OPEN on {self.active_trade['symbol']}.")
 
-if __name__ == "__main__":
-    tester = Backtester("data/BTC_USDT_15m.csv") # Test on one file first
-    tester.run_simulation(limit_per_file=20) # Small test to ensure it runs
+        return {
+            "total_trades": total,
+            "wins": wins,
+            "win_rate": win_rate,
+            "avg_rr": avg_rr,
+            "monthly_trades": extrapolated_monthly_trades
+        }

@@ -4,9 +4,8 @@ import time
 import os
 from datetime import datetime, timedelta, timezone
 
-def fetch_data(symbol, timeframe, days=30):
+def fetch_data(symbol, timeframe, days=7):
     print(f"Fetching {symbol} {timeframe} data for last {days} days...")
-    # Use OKX instead of Binance to avoid geo-restriction in test environment
     exchange = ccxt.okx({
         'enableRateLimit': True,
     })
@@ -23,16 +22,15 @@ def fetch_data(symbol, timeframe, days=30):
             since = ohlcvs[-1][0] + 1
             if len(all_ohlcvs) > 2000:
                 break
-            time.sleep(0.1) # Respect rate limits
+            time.sleep(0.1)
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Error fetching {symbol}: {e}")
             break
 
     if all_ohlcvs:
         df = pd.DataFrame(all_ohlcvs, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
 
-        # Save
         os.makedirs('data', exist_ok=True)
         filename = f"data/{symbol.replace('/', '_')}_{timeframe}.csv"
         df.to_csv(filename, index=False)
@@ -41,14 +39,17 @@ def fetch_data(symbol, timeframe, days=30):
         print(f"No data returned for {symbol} {timeframe}")
 
 if __name__ == "__main__":
-    symbols = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT']
-    timeframes = ['3m', '5m', '15m', '30m']
+    symbols = [
+        'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
+        'ADA/USDT', 'DOGE/USDT', 'AVAX/USDT', 'LINK/USDT', 'DOT/USDT',
+        'MATIC/USDT', 'LTC/USDT', 'BCH/USDT', 'UNI/USDT', 'ATOM/USDT',
+        'XLM/USDT', 'NEAR/USDT', 'APT/USDT', 'ARB/USDT', 'INJ/USDT'
+    ]
+    timeframes = ['15m', '30m'] # Reduced timeframes just for the backtest speed, 3m/5m would generate way too many LLM calls
 
     for symbol in symbols:
         for tf in timeframes:
-            # Note OKX has BNB but volume might be low, let's keep it and test
-            # OKX timeframes: 3m might be supported, let's check
             try:
-                fetch_data(symbol, tf, days=7)
+                fetch_data(symbol, tf, days=7) # 7 days
             except Exception as e:
                 print(f"Failed to fetch {symbol} {tf}: {e}")
