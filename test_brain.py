@@ -1,7 +1,9 @@
 from agent.brain import TradingBrain
 import os
+from dotenv import load_dotenv
 
-key = "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"
+load_dotenv()
+key = os.getenv("NVIDIA_API_KEY")
 brain = TradingBrain(api_key=key)
 res = brain.query("Test message. Reply with 'OK'.")
 print(f"Brain Response: {res}")
