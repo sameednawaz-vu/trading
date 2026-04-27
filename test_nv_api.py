@@ -3,8 +3,11 @@ import requests
 import json
 
 def test_nvidia_api():
+    import os
+    from dotenv import load_dotenv
+    load_dotenv()
     url = "https://integrate.api.nvidia.com/v1/chat/completions"
-    api_key = "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"
+    api_key = os.getenv("NVIDIA_API_KEY")
     
     headers = {
         "Authorization": f"Bearer {api_key}",

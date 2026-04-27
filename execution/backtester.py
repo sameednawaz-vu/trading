@@ -6,7 +6,7 @@ import sys
 from tqdm import tqdm
 
 # Add root to path for imports
-sys.path.append('E:/TRADING')
+sys.path.append('.')
 
 from data_ingestion import DataIngestor
 from ict_engine import ICTEngine
@@ -39,18 +39,40 @@ class Backtester:
 
         print(f"Starting High-Volume Backtest for {self.symbol}...")
         
+        df_exec['timestamp'] = pd.to_datetime(df_exec['timestamp'])
+        df_bias['timestamp'] = pd.to_datetime(df_bias['timestamp'])
+
         # Pre-compute all features (Optimized: compute once for the whole year)
         print(f"Pre-computing {self.bias_tf} features...")
         bias_features = self.ict.compute_smc_features(df_bias)
+        # Shift bias data by 1 to completely prevent lookahead bias when aligning timeframes
+        df_bias_shifted = df_bias.copy()
+        for col in df_bias_shifted.columns:
+            if col != 'timestamp':
+                df_bias_shifted[col] = df_bias_shifted[col].shift(1)
+        # Drop the first NaN row introduced by shift
+        df_bias_shifted = df_bias_shifted.dropna()
+
+        # Determine bias at each HTF step
+        print(f"Pre-computing bias...")
+        bias_list = []
+        for i in range(len(df_bias_shifted)):
+            if i < 50:
+                bias_list.append("Neutral")
+            else:
+                window = df_bias_shifted.iloc[i-50:i]
+                bias_list.append(self.ict.get_bias(window))
+        df_bias_shifted['bias'] = bias_list
+
+        # Merge HTF bias into LTF execution data using merge_asof
+        df_exec = pd.merge_asof(df_exec.sort_values('timestamp'), df_bias_shifted[['timestamp', 'bias']].sort_values('timestamp'), on='timestamp', direction='backward')
+        df_exec['bias'] = df_exec['bias'].fillna("Neutral")
+
         print(f"Pre-computing {self.execution_tf} features...")
         exec_features = self.ict.compute_smc_features(df_exec)
         
-        df_exec['timestamp'] = pd.to_datetime(df_exec['timestamp'])
-        df_bias['timestamp'] = pd.to_datetime(df_bias['timestamp'])
-        
         # Start after enough data for indicators
         start_idx = 500
-        bias = "Neutral"
         
         # Progress bar for the whole year
         for i in tqdm(range(start_idx, len(df_exec)), desc=f"Backtesting {self.symbol}"):
@@ -61,13 +83,7 @@ class Backtester:
                 self.manage_trade(current_candle)
                 continue
 
-            # Bias (HTF) - Update only every hour for speed
-            if i == start_idx or current_time.minute == 0:
-                bias_idx_slice = df_bias[df_bias['timestamp'] <= current_time]
-                if len(bias_idx_slice) >= 50:
-                    last_bias_idx = bias_idx_slice.index[-1]
-                    bias_window = df_bias.iloc[last_bias_idx-50:last_bias_idx]
-                    bias = self.ict.get_bias(bias_window)
+            bias = current_candle['bias']
 
             # Execution logic (LTF)
             # Use pre-computed FVG/OB for index i
