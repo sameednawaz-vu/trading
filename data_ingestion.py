@@ -2,6 +2,7 @@ import ccxt
 import pandas as pd
 import os
 import time
+import json
 from datetime import datetime, timedelta
 from tqdm import tqdm
 
@@ -73,15 +74,16 @@ class DataIngestor:
 
 if __name__ == "__main__":
     ingestor = DataIngestor()
-    # Fetching 1 year of data: April 2025 back to April 2024 (Simulated context date is April 2026, so 2025-2026)
-    # Actually, current session context says date is April 25, 2026.
-    # So "last year" is April 2025 to April 2026.
+    # Fetching 1 year of data: April 2025 back to April 2024
     start = "2025-04-01T00:00:00Z"
     end = "2026-04-25T00:00:00Z"
-    
-    symbols = ['BTC/USDT', 'ETH/USDT'] # Start with top 2 to manage disk/time
-    timeframes = ['1h', '5m'] # Necessary for Bias + Execution
-    
+
+    with open('E:/TRADING/top_20_assets.json', 'r') as f:
+        config = json.load(f)
+
+    symbols = config['assets']
+    timeframes = ['1h', '30m', '15m', '5m']
+
     for symbol in symbols:
         for tf in timeframes:
             ingestor.fetch_historical_data(symbol, tf, start, end)

@@ -70,24 +70,50 @@ class Backtester:
                     bias = self.ict.get_bias(bias_window)
 
             # Execution logic (LTF)
-            # Use pre-computed FVG/OB for index i
+            # Use pre-computed FVG/OB/Liquidity for index i
+            lookback = 50
             local_fvg = {
-                'FVG': exec_features['fvg']['FVG'].iloc[i-20:i].to_dict(),
-                'Top': exec_features['fvg']['Top'].iloc[i-20:i].to_dict(),
-                'Bottom': exec_features['fvg']['Bottom'].iloc[i-20:i].to_dict(),
-                'MitigatedIndex': exec_features['fvg']['MitigatedIndex'].iloc[i-20:i].to_dict()
+                'FVG': exec_features['fvg']['FVG'].iloc[i-lookback:i].to_dict(),
+                'Top': exec_features['fvg']['Top'].iloc[i-lookback:i].to_dict(),
+                'Bottom': exec_features['fvg']['Bottom'].iloc[i-lookback:i].to_dict(),
+                'MitigatedIndex': exec_features['fvg']['MitigatedIndex'].iloc[i-lookback:i].to_dict()
             }
             local_ob = {
-                'OB': exec_features['ob']['OB'].iloc[i-20:i].to_dict(),
-                'Top': exec_features['ob']['Top'].iloc[i-20:i].to_dict(),
-                'Bottom': exec_features['ob']['Bottom'].iloc[i-20:i].to_dict(),
-                'MitigatedIndex': exec_features['ob']['MitigatedIndex'].iloc[i-20:i].to_dict()
+                'OB': exec_features['ob']['OB'].iloc[i-lookback:i].to_dict(),
+                'Top': exec_features['ob']['Top'].iloc[i-lookback:i].to_dict(),
+                'Bottom': exec_features['ob']['Bottom'].iloc[i-lookback:i].to_dict(),
+                'MitigatedIndex': exec_features['ob']['MitigatedIndex'].iloc[i-lookback:i].to_dict()
+            }
+            local_liq = {
+                'Liquidity': exec_features['liquidity']['Liquidity'].iloc[i-lookback:i].to_dict(),
+                'Level': exec_features['liquidity']['Level'].iloc[i-lookback:i].to_dict(),
+                'Swept': exec_features['liquidity']['Swept'].iloc[i-lookback:i].to_dict()
             }
             
+            # HTF Features
+            lookback_htf = 10
+            # Find the closest 1h candle to current_time
+            bias_row = df_bias[df_bias['timestamp'] <= current_time].iloc[-1:]
+            if not bias_row.empty:
+                htf_idx = bias_row.index[0]
+                local_fvg_htf = {
+                    'FVG': bias_features['fvg']['FVG'].iloc[htf_idx-lookback_htf:htf_idx].to_dict(),
+                    'Top': bias_features['fvg']['Top'].iloc[htf_idx-lookback_htf:htf_idx].to_dict(),
+                    'Bottom': bias_features['fvg']['Bottom'].iloc[htf_idx-lookback_htf:htf_idx].to_dict()
+                }
+            else:
+                local_fvg_htf = {}
+
             market_summary = {
                 "price": current_candle['close'],
                 "bias": bias,
-                "features": {"fvg": local_fvg, "ob": local_ob}
+                "killzone": self.ict.is_killzone(current_time),
+                "features": {
+                    "fvg": local_fvg, 
+                    "ob": local_ob, 
+                    "liquidity": local_liq,
+                    "htf_fvg": local_fvg_htf
+                }
             }
             
             setup_json = self.brain.generate_hypothesis(json.dumps(market_summary))
@@ -119,6 +145,7 @@ class Backtester:
             "take_profit": setup['take_profit'],
             "position_size": pos_size,
             "timestamp": str(candle['timestamp']),
+            "setup_details": setup,
             "id": None
         }
         self.current_trade['id'] = self.memory.log_trade(self.current_trade)
@@ -148,18 +175,52 @@ class Backtester:
         print(f"\nReport for {self.symbol}:")
         print(f"Final Balance: ${self.balance:.2f}")
         total = len(self.trades_history)
+        wins = len([t for t in self.trades_history if t['result'] == 'success'])
+        win_rate = (wins/total) if total > 0 else 0
+        
+        report = {
+            "symbol": self.symbol,
+            "tf": self.execution_tf,
+            "total_trades": total,
+            "win_rate": win_rate,
+            "balance": self.balance
+        }
+        
+        # ACEO STATE UPDATE
+        state_path = 'e:/TRADING/agency_state.json'
+        with open(state_path, 'r') as f:
+            state = json.load(f)
+        
+        state['assets_processed'].append(report)
+        state['current_metrics']['total_trades'] += total
+        # Recalculate global win rate
+        all_wins = sum(a['win_rate'] * a['total_trades'] for a in state['assets_processed'])
+        all_trades = sum(a['total_trades'] for a in state['assets_processed'])
+        state['current_metrics']['overall_win_rate'] = all_wins / all_trades if all_trades > 0 else 0
+        state['last_checkpoint'] = datetime.utcnow().isoformat()
+        
+        with open(state_path, 'w') as f:
+            json.dump(state, f, indent=4)
+
         if total > 0:
-            wins = len([t for t in self.trades_history if t['result'] == 'success'])
-            print(f"Trades: {total} | Win Rate: {(wins/total)*100:.2f}%")
-            df_trades = pd.DataFrame(self.trades_history)
-            df_trades['month'] = pd.to_datetime(df_trades['timestamp']).dt.to_period('M')
-            monthly_counts = df_trades.groupby('month').size()
-            print(f"Avg Trades/Month: {monthly_counts.mean():.1f}")
+            print(f"Trades: {total} | Win Rate: {win_rate*100:.2f}%")
         else:
             print("No trades executed.")
 
 if __name__ == "__main__":
-    symbols = ['BTC/USDT', 'ETH/USDT']
-    for s in symbols:
-        tester = Backtester(s)
-        tester.run()
+    state_path = 'e:/TRADING/agency_state.json'
+    with open('e:/TRADING/top_20_assets.json', 'r') as f:
+        config = json.load(f)
+    
+    timeframes = ['5m', '15m', '30m']
+    for s in config['assets']:
+        for tf in timeframes:
+            # Check if already processed
+            with open(state_path, 'r') as f:
+                state = json.load(f)
+            if any(a['symbol'] == s and a['tf'] == tf for a in state['assets_processed']):
+                continue
+                
+            print(f"\n--- ACEO Executing {s} on {tf} ---")
+            tester = Backtester(s, execution_tf=tf)
+            tester.run()

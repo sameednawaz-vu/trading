@@ -1,0 +1,54 @@
+[
+    {
+        "name": "mfi_reversal_htf_ema",
+        "win_rate": 0.2971887550200803,
+        "total_trades": 249,
+        "max_drawdown": 0.6982758620689655,
+        "max_loss_streak": 162,
+        "avg_hold_time_mins": 368.4136546184739,
+        "expected_pnl_per_trade": -10.843373493975903,
+        "regime_performance": {
+            "SIDEWAYS": 0.2971887550200803
+        },
+        "best_regime": "SIDEWAYS"
+    },
+    {
+        "name": "london_judas_swing",
+        "win_rate": 0.6363636363636364,
+        "total_trades": 11,
+        "max_drawdown": 0.02830188679245283,
+        "max_loss_streak": 3,
+        "avg_hold_time_mins": 303.1818181818182,
+        "expected_pnl_per_trade": 90.9090909090909,
+        "regime_performance": {
+            "SIDEWAYS": 0.6363636363636364
+        },
+        "best_regime": "SIDEWAYS"
+    },
+    {
+        "name": "fvg_trend_reversal",
+        "win_rate": 0.5897435897435898,
+        "total_trades": 39,
+        "max_drawdown": 0.07758620689655173,
+        "max_loss_streak": 9,
+        "avg_hold_time_mins": 161.66666666666666,
+        "expected_pnl_per_trade": 76.92307692307692,
+        "regime_performance": {
+            "SIDEWAYS": 0.5897435897435898
+        },
+        "best_regime": "SIDEWAYS"
+    },
+    {
+        "name": "smt_divergence_mfi",
+        "win_rate": 0.24302788844621515,
+        "total_trades": 251,
+        "max_drawdown": 0.8083832335329342,
+        "max_loss_streak": 135,
+        "avg_hold_time_mins": 365.6573705179283,
+        "expected_pnl_per_trade": -27.09163346613546,
+        "regime_performance": {
+            "SIDEWAYS": 0.24302788844621515
+        },
+        "best_regime": "SIDEWAYS"
+    }
+]

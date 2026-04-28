@@ -1,0 +1,6 @@
+ccxt==4.5.50
+pandas==3.0.2
+smartmoneyconcepts==0.0.27
+openai==2.32.0
+python-dotenv
+tqdm

@@ -54,7 +54,7 @@ class MemoryManager:
             INSERT INTO trades (timestamp, symbol, timeframe, side, entry_price, stop_loss, take_profit, result, pnl, setup_details)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            datetime.utcnow().isoformat(),
+            trade_data.get('timestamp', datetime.utcnow().isoformat()),
             trade_data['symbol'],
             trade_data['timeframe'],
             trade_data['side'],

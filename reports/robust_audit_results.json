@@ -1,0 +1,272 @@
+[
+    {
+        "name": "fvg_trend_reversal",
+        "win_rate": 0.6753246753246753,
+        "total_trades": 77,
+        "max_drawdown": 0.04580152671755725,
+        "max_loss_streak": 6,
+        "avg_hold_time_mins": 47.077922077922075,
+        "expected_pnl_per_trade": 102.59740259740259,
+        "regime_performance": {
+            "BULL": {
+                "win_rate": 0.6521739130434783,
+                "trade_count": 23,
+                "pnl": 2200.0
+            },
+            "BEAR": {
+                "win_rate": 0.625,
+                "trade_count": 16,
+                "pnl": 1400.0
+            },
+            "SIDEWAYS": {
+                "win_rate": 0.7692307692307693,
+                "trade_count": 13,
+                "pnl": 1700.0
+            }
+        },
+        "best_regime": "SIDEWAYS"
+    },
+    {
+        "name": "ny_silver_bullet",
+        "win_rate": 0.3076923076923077,
+        "total_trades": 13,
+        "max_drawdown": 0.07547169811320754,
+        "max_loss_streak": 8,
+        "avg_hold_time_mins": 51.15384615384615,
+        "expected_pnl_per_trade": -7.6923076923076925,
+        "regime_performance": {
+            "BULL": {
+                "win_rate": 0.8,
+                "trade_count": 5,
+                "pnl": 700.0
+            },
+            "BEAR": {
+                "win_rate": 0.0,
+                "trade_count": 1,
+                "pnl": -100.0
+            },
+            "SIDEWAYS": {
+                "win_rate": 0.0,
+                "trade_count": 3,
+                "pnl": -300.0
+            }
+        },
+        "best_regime": "BULL"
+    },
+    {
+        "name": "smt_divergence_mfi",
+        "win_rate": 0.342,
+        "total_trades": 500,
+        "max_drawdown": 0.6713615023474179,
+        "max_loss_streak": 97,
+        "avg_hold_time_mins": 261.9,
+        "expected_pnl_per_trade": 2.6,
+        "regime_performance": {
+            "BULL": {
+                "win_rate": 0.47413793103448276,
+                "trade_count": 116,
+                "pnl": 4900.0
+            },
+            "BEAR": {
+                "win_rate": 0.0,
+                "trade_count": 21,
+                "pnl": -2100.0
+            },
+            "SIDEWAYS": {
+                "win_rate": 0.30324909747292417,
+                "trade_count": 277,
+                "pnl": -2500.0
+            }
+        },
+        "best_regime": "BULL"
+    },
+    {
+        "name": "mfi_reversal_htf_ema",
+        "win_rate": 0.286,
+        "total_trades": 500,
+        "max_drawdown": 0.9244444444444444,
+        "max_loss_streak": 200,
+        "avg_hold_time_mins": 406.92,
+        "expected_pnl_per_trade": -14.2,
+        "regime_performance": {
+            "BULL": {
+                "win_rate": 0.2754491017964072,
+                "trade_count": 334,
+                "pnl": -5800.0
+            },
+            "BEAR": {
+                "win_rate": 0.0,
+                "trade_count": 9,
+                "pnl": -900.0
+            },
+            "SIDEWAYS": {
+                "win_rate": 0.3248407643312102,
+                "trade_count": 157,
+                "pnl": -400.0
+            }
+        },
+        "best_regime": "SIDEWAYS"
+    },
+    {
+        "name": "power_of_three",
+        "win_rate": 0.75,
+        "total_trades": 12,
+        "max_drawdown": 0.026785714285714284,
+        "max_loss_streak": 3,
+        "avg_hold_time_mins": 62.5,
+        "expected_pnl_per_trade": 125.0,
+        "regime_performance": {
+            "BULL": {
+                "win_rate": 1.0,
+                "trade_count": 3,
+                "pnl": 600.0
+            },
+            "BEAR": {
+                "win_rate": 1.0,
+                "trade_count": 3,
+                "pnl": 600.0
+            },
+            "SIDEWAYS": {
+                "win_rate": 0.0,
+                "trade_count": 0,
+                "pnl": 0.0
+            }
+        },
+        "best_regime": "BULL"
+    },
+    {
+        "name": "premium_discount_mss_fvg",
+        "win_rate": 0.0,
+        "total_trades": 4,
+        "max_drawdown": 0.04,
+        "max_loss_streak": 4,
+        "avg_hold_time_mins": 275.0,
+        "expected_pnl_per_trade": -100.0,
+        "regime_performance": {
+            "BULL": {
+                "win_rate": 0.0,
+                "trade_count": 1,
+                "pnl": -100.0
+            },
+            "BEAR": {
+                "win_rate": 0.0,
+                "trade_count": 1,
+                "pnl": -100.0
+            },
+            "SIDEWAYS": {
+                "win_rate": 0.0,
+                "trade_count": 1,
+                "pnl": -100.0
+            }
+        },
+        "best_regime": "BULL"
+    },
+    {
+        "name": "overlap_sweep_reversal",
+        "win_rate": 0.0,
+        "total_trades": 2,
+        "max_drawdown": 0.02,
+        "max_loss_streak": 2,
+        "avg_hold_time_mins": 610.0,
+        "expected_pnl_per_trade": -100.0,
+        "regime_performance": {
+            "BULL": {
+                "win_rate": 0.0,
+                "trade_count": 1,
+                "pnl": -100.0
+            },
+            "BEAR": {
+                "win_rate": 0.0,
+                "trade_count": 0,
+                "pnl": 0.0
+            },
+            "SIDEWAYS": {
+                "win_rate": 0.0,
+                "trade_count": 1,
+                "pnl": -100.0
+            }
+        },
+        "best_regime": "BULL"
+    },
+    {
+        "name": "turtle_soup_mfi_div",
+        "win_rate": 0.34502923976608185,
+        "total_trades": 171,
+        "max_drawdown": 0.3383458646616541,
+        "max_loss_streak": 28,
+        "avg_hold_time_mins": 145.67251461988303,
+        "expected_pnl_per_trade": 3.508771929824561,
+        "regime_performance": {
+            "BULL": {
+                "win_rate": 0.4666666666666667,
+                "trade_count": 45,
+                "pnl": 1800.0
+            },
+            "BEAR": {
+                "win_rate": 0.2777777777777778,
+                "trade_count": 36,
+                "pnl": -600.0
+            },
+            "SIDEWAYS": {
+                "win_rate": 0.5555555555555556,
+                "trade_count": 27,
+                "pnl": 1800.0
+            }
+        },
+        "best_regime": "SIDEWAYS"
+    },
+    {
+        "name": "breaker_retest_idm",
+        "win_rate": 0.4074074074074074,
+        "total_trades": 27,
+        "max_drawdown": 0.1,
+        "max_loss_streak": 10,
+        "avg_hold_time_mins": 260.0,
+        "expected_pnl_per_trade": 22.22222222222222,
+        "regime_performance": {
+            "BULL": {
+                "win_rate": 0.4444444444444444,
+                "trade_count": 18,
+                "pnl": 600.0
+            },
+            "BEAR": {
+                "win_rate": 0.0,
+                "trade_count": 0,
+                "pnl": 0.0
+            },
+            "SIDEWAYS": {
+                "win_rate": 0.0,
+                "trade_count": 0,
+                "pnl": 0.0
+            }
+        },
+        "best_regime": "BULL"
+    },
+    {
+        "name": "ict_macro_strict",
+        "win_rate": 0.8,
+        "total_trades": 10,
+        "max_drawdown": 0.018518518518518517,
+        "max_loss_streak": 2,
+        "avg_hold_time_mins": 84.5,
+        "expected_pnl_per_trade": 140.0,
+        "regime_performance": {
+            "BULL": {
+                "win_rate": 1.0,
+                "trade_count": 2,
+                "pnl": 400.0
+            },
+            "BEAR": {
+                "win_rate": 0.0,
+                "trade_count": 0,
+                "pnl": 0.0
+            },
+            "SIDEWAYS": {
+                "win_rate": 0.0,
+                "trade_count": 0,
+                "pnl": 0.0
+            }
+        },
+        "best_regime": "BULL"
+    }
+]
