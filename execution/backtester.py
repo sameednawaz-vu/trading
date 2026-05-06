@@ -6,7 +6,7 @@ import sys
 from tqdm import tqdm
 
 # Add root to path for imports
-sys.path.append('E:/TRADING')
+sys.path.append('.')
 
 from data_ingestion import DataIngestor
 from ict_engine import ICTEngine
@@ -14,17 +14,23 @@ from agent.memory import MemoryManager
 from agent.brain import TradingBrain
 
 class Backtester:
-    def __init__(self, symbol, execution_tf='5m', bias_tf='1h', start_balance=10000):
+    def __init__(self, symbol, execution_tf='15m', bias_tf='1h', start_balance=10000):
         self.symbol = symbol
         self.execution_tf = execution_tf
         self.bias_tf = bias_tf
         self.balance = start_balance
-        self.ingestor = DataIngestor()
+        self.ingestor = DataIngestor(exchange_id='kraken')
         self.ict = ICTEngine()
         self.memory = MemoryManager()
         self.brain = TradingBrain()
         self.current_trade = None
         self.trades_history = []
+        self.state_path = './agency_state.json'
+
+        # Initialize state if not exists
+        if not os.path.exists(self.state_path):
+            with open(self.state_path, 'w') as f:
+                json.dump({"assets_processed": [], "current_metrics": {"total_trades": 0, "overall_win_rate": 0}}, f)
 
     def load_full_data(self):
         df_exec = self.ingestor.load_full_data(self.symbol, self.execution_tf)
@@ -37,7 +43,7 @@ class Backtester:
             print(f"Full data for {self.symbol} not found.")
             return
 
-        print(f"Starting High-Volume Backtest for {self.symbol}...")
+        print(f"Starting High-Volume Backtest for {self.symbol} on {self.execution_tf}...")
         
         # Pre-compute all features (Optimized: compute once for the whole year)
         print(f"Pre-computing {self.bias_tf} features...")
@@ -50,6 +56,10 @@ class Backtester:
         
         # Start after enough data for indicators
         start_idx = 500
+        if start_idx >= len(df_exec):
+            print("Not enough data to start backtest.")
+            return
+
         bias = "Neutral"
         
         # Progress bar for the whole year
@@ -62,16 +72,20 @@ class Backtester:
                 continue
 
             # Bias (HTF) - Update only every hour for speed
+            # To prevent lookahead bias, we must only look at bias candles strictly BEFORE current_time
             if i == start_idx or current_time.minute == 0:
-                bias_idx_slice = df_bias[df_bias['timestamp'] <= current_time]
+                bias_idx_slice = df_bias[df_bias['timestamp'] < current_time]
                 if len(bias_idx_slice) >= 50:
                     last_bias_idx = bias_idx_slice.index[-1]
                     bias_window = df_bias.iloc[last_bias_idx-50:last_bias_idx]
                     bias = self.ict.get_bias(bias_window)
 
             # Execution logic (LTF)
-            # Use pre-computed FVG/OB/Liquidity for index i
+            # Use pre-computed FVG/OB/Liquidity for index i (up to i-1 to avoid lookahead on current candle)
             lookback = 50
+            if i-lookback < 0: continue
+
+            # We use features up to i-1 because we are deciding to enter AT index i based on previous context.
             local_fvg = {
                 'FVG': exec_features['fvg']['FVG'].iloc[i-lookback:i].to_dict(),
                 'Top': exec_features['fvg']['Top'].iloc[i-lookback:i].to_dict(),
@@ -90,17 +104,19 @@ class Backtester:
                 'Swept': exec_features['liquidity']['Swept'].iloc[i-lookback:i].to_dict()
             }
             
-            # HTF Features
+            # HTF Features (Fix Lookahead Bias: strictly < current_time)
             lookback_htf = 10
-            # Find the closest 1h candle to current_time
-            bias_row = df_bias[df_bias['timestamp'] <= current_time].iloc[-1:]
+            bias_row = df_bias[df_bias['timestamp'] < current_time]
             if not bias_row.empty:
-                htf_idx = bias_row.index[0]
-                local_fvg_htf = {
-                    'FVG': bias_features['fvg']['FVG'].iloc[htf_idx-lookback_htf:htf_idx].to_dict(),
-                    'Top': bias_features['fvg']['Top'].iloc[htf_idx-lookback_htf:htf_idx].to_dict(),
-                    'Bottom': bias_features['fvg']['Bottom'].iloc[htf_idx-lookback_htf:htf_idx].to_dict()
-                }
+                htf_idx = bias_row.index[-1]
+                if htf_idx - lookback_htf >= 0:
+                    local_fvg_htf = {
+                        'FVG': bias_features['fvg']['FVG'].iloc[htf_idx-lookback_htf:htf_idx].to_dict(),
+                        'Top': bias_features['fvg']['Top'].iloc[htf_idx-lookback_htf:htf_idx].to_dict(),
+                        'Bottom': bias_features['fvg']['Bottom'].iloc[htf_idx-lookback_htf:htf_idx].to_dict()
+                    }
+                else:
+                    local_fvg_htf = {}
             else:
                 local_fvg_htf = {}
 
@@ -117,18 +133,20 @@ class Backtester:
             }
             
             setup_json = self.brain.generate_hypothesis(json.dumps(market_summary))
-            setup = json.loads(setup_json)
-            
-            if setup.get('side') in ['Long', 'Short']:
-                if setup['side'] == bias or bias == "Neutral":
-                    self.enter_trade(setup, current_candle)
+            try:
+                setup = json.loads(setup_json)
+                if setup.get('side') in ['Long', 'Short']:
+                    if setup['side'] == bias or bias == "Neutral":
+                        self.enter_trade(setup, current_candle)
+            except json.JSONDecodeError:
+                pass # ignore invalid json from brain
 
         self.final_report()
 
     def enter_trade(self, setup, candle):
         try:
             rr = (setup['take_profit'] - setup['entry_price']) / (setup['entry_price'] - setup['stop_loss'])
-            if abs(rr) < 2: return
+            if abs(rr) < 2: return # Strictly enforce minimum 1:2 RR
         except: return
 
         risk = self.balance * 0.01 # 1% risk
@@ -169,6 +187,15 @@ class Backtester:
             self.balance += pnl
             self.trades_history.append({"result": result, "pnl": pnl, "timestamp": candle['timestamp']})
             self.memory.update_trade_result(t['id'], result, pnl, "")
+
+            if result == 'failure':
+                # Pass to agent brain for reflection
+                self.brain.reflect_on_failure(t, result)
+                # Store in Mempalace for future reference
+                self.memory.store_pattern('failed_setups', f"failed_{t['id']}_{t['symbol'].replace('/', '')}", t)
+            else:
+                self.memory.store_pattern('successful_setups', f"success_{t['id']}_{t['symbol'].replace('/', '')}", t)
+
             self.current_trade = None
 
     def final_report(self):
@@ -186,20 +213,21 @@ class Backtester:
             "balance": self.balance
         }
         
-        # ACEO STATE UPDATE
-        state_path = 'e:/TRADING/agency_state.json'
-        with open(state_path, 'r') as f:
+        with open(self.state_path, 'r') as f:
             state = json.load(f)
         
+        # Remove old run for same symbol/tf if exists
+        state['assets_processed'] = [a for a in state['assets_processed'] if not (a['symbol'] == self.symbol and a['tf'] == self.execution_tf)]
+
         state['assets_processed'].append(report)
-        state['current_metrics']['total_trades'] += total
-        # Recalculate global win rate
+        # Recalculate globals
         all_wins = sum(a['win_rate'] * a['total_trades'] for a in state['assets_processed'])
         all_trades = sum(a['total_trades'] for a in state['assets_processed'])
+        state['current_metrics']['total_trades'] = all_trades
         state['current_metrics']['overall_win_rate'] = all_wins / all_trades if all_trades > 0 else 0
         state['last_checkpoint'] = datetime.utcnow().isoformat()
         
-        with open(state_path, 'w') as f:
+        with open(self.state_path, 'w') as f:
             json.dump(state, f, indent=4)
 
         if total > 0:
@@ -208,19 +236,4 @@ class Backtester:
             print("No trades executed.")
 
 if __name__ == "__main__":
-    state_path = 'e:/TRADING/agency_state.json'
-    with open('e:/TRADING/top_20_assets.json', 'r') as f:
-        config = json.load(f)
-    
-    timeframes = ['5m', '15m', '30m']
-    for s in config['assets']:
-        for tf in timeframes:
-            # Check if already processed
-            with open(state_path, 'r') as f:
-                state = json.load(f)
-            if any(a['symbol'] == s and a['tf'] == tf for a in state['assets_processed']):
-                continue
-                
-            print(f"\n--- ACEO Executing {s} on {tf} ---")
-            tester = Backtester(s, execution_tf=tf)
-            tester.run()
+    pass

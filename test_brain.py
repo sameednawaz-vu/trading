@@ -1,7 +1,23 @@
 from agent.brain import TradingBrain
-import os
+import json
 
-key = "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"
-brain = TradingBrain(api_key=key)
-res = brain.query("Test message. Reply with 'OK'.")
-print(f"Brain Response: {res}")
+brain = TradingBrain()
+market_data = {
+    "price": 60000,
+    "bias": "Bullish",
+    "killzone": "New York",
+    "features": {
+        "fvg": {
+            "FVG": {"0": 1},
+            "Bottom": {"0": 59900},
+            "Top": {"0": 59950}
+        },
+        "ob": {},
+        "liquidity": {},
+        "htf_fvg": {}
+    }
+}
+print("Testing generation of hypothesis...")
+hypothesis = brain.generate_hypothesis(market_data)
+print(hypothesis)
+print("Brain logic tested.")
