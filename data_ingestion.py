@@ -7,11 +7,11 @@ from datetime import datetime, timedelta
 from tqdm import tqdm
 
 class DataIngestor:
-    def __init__(self, exchange_id='binance'):
+    def __init__(self, exchange_id='kraken'):
         self.exchange = getattr(ccxt, exchange_id)({
             'enableRateLimit': True,
         })
-        self.data_path = 'E:/TRADING/data'
+        self.data_path = './data'
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
 
@@ -30,7 +30,7 @@ class DataIngestor:
         
         while since < end_timestamp:
             try:
-                limit = 1000
+                limit = 720 # kraken limit
                 ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
                 if not ohlcv:
                     break
@@ -73,12 +73,15 @@ class DataIngestor:
         return None
 
 if __name__ == "__main__":
-    ingestor = DataIngestor()
-    # Fetching 1 year of data: April 2025 back to April 2024
-    start = "2025-04-01T00:00:00Z"
-    end = "2026-04-25T00:00:00Z"
+    ingestor = DataIngestor(exchange_id='kraken')
+    # Fetching 1 year of data
+    end_dt = datetime.now()
+    start_dt = end_dt - timedelta(days=365)
 
-    with open('E:/TRADING/top_20_assets.json', 'r') as f:
+    start = start_dt.isoformat() + "Z"
+    end = end_dt.isoformat() + "Z"
+
+    with open('./top_20_assets.json', 'r') as f:
         config = json.load(f)
 
     symbols = config['assets']

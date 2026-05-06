@@ -1,58 +1,60 @@
 import json
 import pandas as pd
 import numpy as np
-import hashlib
-import subprocess
 import os
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class TradingBrain:
     def __init__(self, api_key=None):
-        self.learnings_path = r'E:\TRADING\learnings.txt'
-        # Use JULES_API_KEY_ACCOUNT_2 from .env if available
-        self.api_key = api_key or os.getenv("JULES_API_KEY_ACCOUNT_2")
+        self.learnings_path = './learnings.txt'
+        self.api_key = api_key or os.getenv("NVIDIA_API_KEY")
+        self.api_url = "https://integrate.api.nvidia.com/v1/chat/completions"
 
-    def _call_gemini_cli(self, prompt):
+    def _call_nvidia_api(self, prompt):
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "meta/llama-3.3-70b-instruct",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+            "top_p": 0.7,
+            "max_tokens": 1024,
+            "stream": False
+        }
         try:
-            env = os.environ.copy()
-            if self.api_key:
-                env["JULES_API_KEY"] = self.api_key
-            
-            escaped_prompt = prompt.replace('"', '`"').replace('$', '`$')
-            cmd = f'echo "{escaped_prompt}" | gemini -p - -o json'
-            
-            result = subprocess.run(
-                ['powershell.exe', '-NoProfile', '-Command', cmd],
-                capture_output=True, text=True, env=env, timeout=120
-            )
-            if result.returncode == 0:
-                full_json = json.loads(result.stdout.strip())
-                content = full_json.get('response', '')
+            response = requests.post(self.api_url, headers=headers, json=payload, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                content = data['choices'][0]['message']['content']
+                # Extract JSON from response
                 start = content.find('{')
                 end = content.rfind('}')
                 if start != -1 and end != -1:
                     return content[start:end+1]
                 return content
             else:
-                with open(r'E:\TRADING\logs\cli_errors.log', 'a') as f:
-                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {result.returncode}\nError: {result.stderr}\n")
+                print(f"API Error: {response.status_code} - {response.text}")
         except Exception as e:
-            print(f"CLI Error: {e}")
+            print(f"Request Error: {e}")
         return None
 
     def generate_hypothesis(self, market_data, context=""):
         try:
             data = json.loads(market_data) if isinstance(market_data, str) else market_data
             
-            # --- STAGE 1: INSTITUTIONAL FILTER v18.0 (Local) ---
-            # Mimicking Jules High-Win setups: Must have Killzone + HTF POI + Sweep
-            hypothesis_json = self._institutional_filter_v18(data)
+            # --- STAGE 1: INSTITUTIONAL FILTER (Local) ---
+            hypothesis_json = self._institutional_filter(data)
             hypothesis = json.loads(hypothesis_json)
             
             if hypothesis.get('side') == 'None':
                 return hypothesis_json
 
-            # --- STAGE 2: NEURAL BRAIN (Remote) ---
-            # Fresh analysis, no cache, grounded in 'Evolved Student' research
+            # --- STAGE 2: NEURAL BRAIN (Remote NVIDIA API) ---
             data_str = json.dumps(data, sort_keys=True)
             learnings = ""
             if os.path.exists(self.learnings_path):
@@ -61,14 +63,15 @@ class TradingBrain:
 
             prompt = f"""
 ### ACEO SOVEREIGN BRAIN MANDATE: EVOLVED STUDENT AGENCY
-You are the Agentic CEO and Master ICT Architect. Your mandate is to reach 80%+ win rate by mimicking the 'Evolved Student Models' and 'MCP' (Market Context & Price) frameworks.
+You are the Agentic CEO and Master ICT Architect. Your mandate is to reach >85% win rate and a minimum 1:2 R:R by mimicking the 'Evolved Student Models' and 'MCP' (Market Context & Price) frameworks.
 Review this trade hypothesis triggered by our local Institutional Filter.
 
-### INTEGRATED STUDENT MODELS:
-1. **Model 1 (BOS Model)**: HTF Bias + BOS (Break of Structure) + FVG.
-2. **Model 2 (Inducement Model)**: Identify 'IDM' (Retail Trap). Price must sweep the 'Inducement' (last low/high before POI) before hitting the FVG/OB.
-3. **Model 3 (OTE Model)**: Fibonacci 62%–79% retracement + FVG confluence.
-4. **Model 4 (Silver Bullet)**: Strict Killzone (3-4AM, 10-11AM, 2-3PM NY). Liquidity Raid on 9:00 AM range -> MSS -> FVG.
+### STRATEGY RULES (ICT):
+1. **Trend Alignment**: Only trade in the direction of the HTF bias (1h).
+2. **Liquidity Sweeps**: A valid setup requires price to have recently swept a swing high/low (Inducement).
+3. **Displacement & FVG**: Look for strong displacement leaving a Fair Value Gap (FVG).
+4. **Order Blocks**: Entries from a valid Order Block (OB) are high probability.
+5. **Risk to Reward**: Must be at least 1:2.
 
 ### CURRENT MARKET DATA:
 {data_str}
@@ -76,10 +79,8 @@ Review this trade hypothesis triggered by our local Institutional Filter.
 ### PREVIOUS AUDITS & CORRECTED MANDATES:
 {learnings}
 
-### REQUIRED MULTI-PERSPECTIVE AUDIT:
-- **CEO**: Strategic alignment with 80% Win Rate mandate.
-- **CSO**: Technical audit of IDM sweep and BOS.
-- **Eng**: Precision execution on FVG Consequent Encroachment.
+### TASK:
+Review the local filter's proposed entry and confirm or reject it. You MUST format your response as valid JSON ONLY.
 
 FINAL DECISION (JSON):
 {{
@@ -87,12 +88,12 @@ FINAL DECISION (JSON):
   "entry_price": float,
   "stop_loss": float,
   "take_profit": float,
-  "model_used": "Model 1" | "Model 2" | "Model 3" | "Model 4",
-  "reason": "Detailed institutional audit identifying IDM and BOS",
+  "model_used": "FVG/OB Confluence" | "Liquidity Raid",
+  "reason": "Detailed institutional audit identifying liquidity sweeps and FVGs",
   "confidence": float
 }}
 """
-            response = self._call_gemini_cli(prompt)
+            response = self._call_nvidia_api(prompt)
             if response:
                 try:
                     res_json = json.loads(response)
@@ -102,58 +103,53 @@ FINAL DECISION (JSON):
                 except:
                     pass
 
-            return hypothesis_json # Fallback to high-prob local setup
+            return hypothesis_json # Fallback to local setup if API fails
 
         except Exception as e:
             print(f"Brain Error: {e}")
         return json.dumps({"side": "None", "reason": "Error"})
 
-    def _institutional_filter_v18(self, data):
+    def _institutional_filter(self, data):
         try:
             price = data['price']
             bias = data.get('bias', 'Neutral')
-            kz = data.get('killzone')
             features = data['features']
-            
-            # 1. Killzone Window (Silver Bullet Windows)
-            if kz not in ['London', 'New York']:
-                return json.dumps({"side": "None", "reason": "Outside Institutional Windows"})
 
-            # 2. HTF POI (1h FVG)
-            htf_fvg = features.get('htf_fvg', {})
-            in_poi = False
-            for idx, val in htf_fvg.get('FVG', {}).items():
-                if htf_fvg['Bottom'][idx] * 0.9995 <= price <= htf_fvg['Top'][idx] * 1.0005:
-                    in_poi = True; break
-            if not in_poi: return json.dumps({"side": "None", "reason": "No HTF POI Confluence"})
-
-            # 3. Liquidity Sweep
+            # Simplify for higher volume: check for FVG and direction
             fvg_data = features.get('fvg', {})
-            recent_lows = [v for v in fvg_data.get('Bottom', {}).values() if not pd.isna(v)]
-            recent_highs = [v for v in fvg_data.get('Top', {}).values() if not pd.isna(v)]
-            last_low = min(recent_lows[-5:]) if recent_lows else None
-            last_high = max(recent_highs[-5:]) if recent_highs else None
+            ob_data = features.get('ob', {})
             
-            bull_sweep = last_low and price > last_low
-            bear_sweep = last_high and price < last_high
-
-            if bull_sweep and bias != 'Bearish':
-                sl = last_low * 0.997
-                tp = price + (price - sl) * 3.0 # Target 1:3 RR for 80% precision
-                return json.dumps({"side": "Long", "entry_price": price, "stop_loss": sl, "take_profit": tp, "model_used": "Model 1", "reason": "Institutional POI + Sweep Detected"})
+            # Simple heuristic for long/short
+            # Look for recent FVG
+            fvg_bottoms = [v for v in fvg_data.get('Bottom', {}).values() if not pd.isna(v)]
+            fvg_tops = [v for v in fvg_data.get('Top', {}).values() if not pd.isna(v)]
             
-            if bear_sweep and bias != 'Bullish':
-                sl = last_high * 1.003
-                tp = price - (sl - price) * 3.0
-                return json.dumps({"side": "Short", "entry_price": price, "stop_loss": sl, "take_profit": tp, "model_used": "Model 1", "reason": "Institutional POI + Sweep Detected"})
+            # Very basic setup logic, the AI will refine it.
+            if bias == "Bullish" and fvg_bottoms:
+                entry = price
+                sl = price * 0.99 # 1% stop
+                tp = price * 1.02 # 2% tp (1:2 R:R)
+                return json.dumps({"side": "Long", "entry_price": entry, "stop_loss": sl, "take_profit": tp, "model_used": "Filter", "reason": "Bullish Bias + Data"})
+            elif bias == "Bearish" and fvg_tops:
+                entry = price
+                sl = price * 1.01
+                tp = price * 0.98
+                return json.dumps({"side": "Short", "entry_price": entry, "stop_loss": sl, "take_profit": tp, "model_used": "Filter", "reason": "Bearish Bias + Data"})
 
-        except: pass
-        return json.dumps({"side": "None", "reason": "Insufficient Institutional Confluence"})
+        except Exception as e:
+            pass
+        return json.dumps({"side": "None", "reason": "Insufficient Local Confluence"})
 
     def reflect_on_failure(self, trade_details, outcome):
-        prompt = f"Analyze failed ICT trade: {json.dumps(trade_details)}. Outcome: {outcome}. Provide a concise 'Corrected Mandate' to prevent this."
-        corrected = self._call_gemini_cli(prompt)
-        if corrected:
-            with open(self.learnings_path, 'a') as f:
-                f.write(f"\n--- Post-Mortem ({pd.Timestamp.now()}) ---\n{corrected.strip()}\n")
+        prompt = f"Analyze failed ICT trade: {json.dumps(trade_details)}. Outcome: {outcome}. Provide a concise 'Corrected Mandate' to prevent this. RETURN JSON: {{\"learning\": \"string\"}}"
+        response = self._call_nvidia_api(prompt)
+        if response:
+            try:
+                res_json = json.loads(response)
+                corrected = res_json.get('learning', '')
+                if corrected:
+                    with open(self.learnings_path, 'a') as f:
+                        f.write(f"\n--- Post-Mortem ({pd.Timestamp.now()}) ---\n{corrected.strip()}\n")
+            except:
+                pass
         return f"Logged: {trade_details.get('id', 'unknown')}"
