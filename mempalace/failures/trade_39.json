@@ -1,0 +1,25 @@
+{
+    "trade": {
+        "symbol": "BTC/USD",
+        "timeframe": "5m",
+        "side": "Long",
+        "entry_price": 81494.85,
+        "stop_loss": 81394.85,
+        "take_profit": 81694.85,
+        "position_size": 0.99,
+        "timestamp": "2026-05-07 12:15:00",
+        "setup_details": {
+            "side": "Long",
+            "entry_price": 81494.85,
+            "stop_loss": 81394.85,
+            "take_profit": 81694.85,
+            "model_used": "ICT FVG/OB Model",
+            "reason": "Based on the identification of a Fair Value Gap (FVG) and the assumption of a recent liquidity sweep, although not directly observable in the provided data. The entry price is calculated at the 50% level of the FVG, with the stop loss placed below the FVG's bottom and the take profit set to achieve a 1:2 Risk/Reward ratio.",
+            "confidence": 0.6
+        },
+        "id": 39
+    },
+    "outcome": "failure",
+    "pnl": -99.0,
+    "reflection": "Logged: 39"
+}

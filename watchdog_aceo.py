@@ -4,13 +4,13 @@ import json
 import os
 
 def run_agency():
-    state_path = 'e:/TRADING/ranking_state.json'
+    state_path = './ranking_state.json'
     
     while True:
         print("ACEO | Starting Strategy Ranking Cycle...")
         try:
             # Run the ranking engine
-            process = subprocess.Popen(['python', 'e:/TRADING/ict_agent/ranking_engine.py'])
+            process = subprocess.Popen(['python', './ict_agent/ranking_engine.py'])
             process.wait()
         except Exception as e:
             print(f"ACEO | System Crash: {e}. Recovering...")

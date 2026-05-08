@@ -1,42 +1,66 @@
 import json
 import pandas as pd
 import numpy as np
-import hashlib
-import subprocess
 import os
+import requests
+import time
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class TradingBrain:
     def __init__(self, api_key=None):
-        self.learnings_path = r'E:\TRADING\learnings.txt'
-        # Use JULES_API_KEY_ACCOUNT_2 from .env if available
+        self.learnings_path = r'./learnings.txt'
         self.api_key = api_key or os.getenv("JULES_API_KEY_ACCOUNT_2")
+        self.api_url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        self.last_api_call_time = 0
+        self.api_call_interval = 60.0 / 40.0 # 40 requests per minute limit
 
-    def _call_gemini_cli(self, prompt):
+        # ensure logs directory exists
+        if not os.path.exists('./logs'):
+            os.makedirs('./logs')
+
+    def _call_llm(self, prompt):
+        # Rate limit to respect 40 RPM
+        current_time = time.time()
+        elapsed = current_time - self.last_api_call_time
+        if elapsed < self.api_call_interval:
+            time.sleep(self.api_call_interval - elapsed)
+            
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": "meta/llama-3.3-70b-instruct",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "top_p": 0.7,
+            "max_tokens": 1024,
+            "stream": False
+        }
+
         try:
-            env = os.environ.copy()
-            if self.api_key:
-                env["JULES_API_KEY"] = self.api_key
+            self.last_api_call_time = time.time()
+            response = requests.post(self.api_url, headers=headers, json=payload, timeout=60)
             
-            escaped_prompt = prompt.replace('"', '`"').replace('$', '`$')
-            cmd = f'echo "{escaped_prompt}" | gemini -p - -o json'
-            
-            result = subprocess.run(
-                ['powershell.exe', '-NoProfile', '-Command', cmd],
-                capture_output=True, text=True, env=env, timeout=120
-            )
-            if result.returncode == 0:
-                full_json = json.loads(result.stdout.strip())
-                content = full_json.get('response', '')
+            if response.status_code == 200:
+                res_json = response.json()
+                content = res_json['choices'][0]['message']['content']
+                # extract json if it's wrapped in markdown or other text
                 start = content.find('{')
                 end = content.rfind('}')
                 if start != -1 and end != -1:
                     return content[start:end+1]
                 return content
             else:
-                with open(r'E:\TRADING\logs\cli_errors.log', 'a') as f:
-                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {result.returncode}\nError: {result.stderr}\n")
+                with open(r'./logs/api_errors.log', 'a') as f:
+                    f.write(f"\n--- {pd.Timestamp.now()} ---\nStatus Code: {response.status_code}\nError: {response.text}\n")
         except Exception as e:
-            print(f"CLI Error: {e}")
+            print(f"API Error: {e}")
+            with open(r'./logs/api_errors.log', 'a') as f:
+                f.write(f"\n--- {pd.Timestamp.now()} ---\nException: {e}\n")
         return None
 
     def generate_hypothesis(self, market_data, context=""):
@@ -61,14 +85,15 @@ class TradingBrain:
 
             prompt = f"""
 ### ACEO SOVEREIGN BRAIN MANDATE: EVOLVED STUDENT AGENCY
-You are the Agentic CEO and Master ICT Architect. Your mandate is to reach 80%+ win rate by mimicking the 'Evolved Student Models' and 'MCP' (Market Context & Price) frameworks.
+You are the Agentic CEO and Master ICT Architect. Your mandate is to reach 80%+ win rate using ICT concepts (Fair Value Gaps, Order Blocks, Liquidity Sweeps).
 Review this trade hypothesis triggered by our local Institutional Filter.
 
-### INTEGRATED STUDENT MODELS:
-1. **Model 1 (BOS Model)**: HTF Bias + BOS (Break of Structure) + FVG.
-2. **Model 2 (Inducement Model)**: Identify 'IDM' (Retail Trap). Price must sweep the 'Inducement' (last low/high before POI) before hitting the FVG/OB.
-3. **Model 3 (OTE Model)**: Fibonacci 62%–79% retracement + FVG confluence.
-4. **Model 4 (Silver Bullet)**: Strict Killzone (3-4AM, 10-11AM, 2-3PM NY). Liquidity Raid on 9:00 AM range -> MSS -> FVG.
+### REQUIRED ANALYSIS:
+1. Identify if a Valid Fair Value Gap (FVG) or Order Block (OB) exists in the direction of the bias.
+2. Ensure there has been a recent Liquidity Sweep before entering the POI.
+3. Determine entry price at the consequent encroachment (50% level) of the FVG/OB.
+4. Place Stop Loss safely behind the swept liquidity or the other side of the FVG/OB.
+5. Target the opposing liquidity pool, ensuring at least a 1:2 Risk/Reward ratio.
 
 ### CURRENT MARKET DATA:
 {data_str}
@@ -76,23 +101,18 @@ Review this trade hypothesis triggered by our local Institutional Filter.
 ### PREVIOUS AUDITS & CORRECTED MANDATES:
 {learnings}
 
-### REQUIRED MULTI-PERSPECTIVE AUDIT:
-- **CEO**: Strategic alignment with 80% Win Rate mandate.
-- **CSO**: Technical audit of IDM sweep and BOS.
-- **Eng**: Precision execution on FVG Consequent Encroachment.
-
-FINAL DECISION (JSON):
+### REQUIRED DECISION FORMAT (JSON ONLY):
 {{
   "side": "Long" | "Short" | "None",
   "entry_price": float,
   "stop_loss": float,
   "take_profit": float,
-  "model_used": "Model 1" | "Model 2" | "Model 3" | "Model 4",
-  "reason": "Detailed institutional audit identifying IDM and BOS",
+  "model_used": "ICT FVG/OB Model",
+  "reason": "Detailed explanation of ICT concepts used.",
   "confidence": float
 }}
 """
-            response = self._call_gemini_cli(prompt)
+            response = self._call_llm(prompt)
             if response:
                 try:
                     res_json = json.loads(response)
@@ -151,8 +171,8 @@ FINAL DECISION (JSON):
         return json.dumps({"side": "None", "reason": "Insufficient Institutional Confluence"})
 
     def reflect_on_failure(self, trade_details, outcome):
-        prompt = f"Analyze failed ICT trade: {json.dumps(trade_details)}. Outcome: {outcome}. Provide a concise 'Corrected Mandate' to prevent this."
-        corrected = self._call_gemini_cli(prompt)
+        prompt = f"Analyze failed ICT trade: {json.dumps(trade_details)}. Outcome: {outcome}. Provide a concise 'Corrected Mandate' to prevent this based on ICT principles."
+        corrected = self._call_llm(prompt)
         if corrected:
             with open(self.learnings_path, 'a') as f:
                 f.write(f"\n--- Post-Mortem ({pd.Timestamp.now()}) ---\n{corrected.strip()}\n")
