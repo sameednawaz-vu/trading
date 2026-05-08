@@ -39,14 +39,20 @@ class Backtester:
 
         print(f"Starting High-Volume Backtest for {self.symbol}...")
         
+        # Shift HTF data by 1 period to prevent lookahead bias when merging/querying
+        df_bias_shifted = df_bias.copy()
+        for col in df_bias_shifted.columns:
+            if col != 'timestamp':
+                df_bias_shifted[col] = df_bias_shifted[col].shift(1)
+
         # Pre-compute all features (Optimized: compute once for the whole year)
         print(f"Pre-computing {self.bias_tf} features...")
-        bias_features = self.ict.compute_smc_features(df_bias)
+        bias_features = self.ict.compute_smc_features(df_bias_shifted)
         print(f"Pre-computing {self.execution_tf} features...")
         exec_features = self.ict.compute_smc_features(df_exec)
         
         df_exec['timestamp'] = pd.to_datetime(df_exec['timestamp'])
-        df_bias['timestamp'] = pd.to_datetime(df_bias['timestamp'])
+        df_bias_shifted['timestamp'] = pd.to_datetime(df_bias_shifted['timestamp'])
         
         # Start after enough data for indicators
         start_idx = 500
@@ -63,10 +69,10 @@ class Backtester:
 
             # Bias (HTF) - Update only every hour for speed
             if i == start_idx or current_time.minute == 0:
-                bias_idx_slice = df_bias[df_bias['timestamp'] <= current_time]
+                bias_idx_slice = df_bias_shifted[df_bias_shifted['timestamp'] <= current_time]
                 if len(bias_idx_slice) >= 50:
                     last_bias_idx = bias_idx_slice.index[-1]
-                    bias_window = df_bias.iloc[last_bias_idx-50:last_bias_idx]
+                    bias_window = df_bias_shifted.iloc[last_bias_idx-50:last_bias_idx]
                     bias = self.ict.get_bias(bias_window)
 
             # Execution logic (LTF)
@@ -93,7 +99,7 @@ class Backtester:
             # HTF Features
             lookback_htf = 10
             # Find the closest 1h candle to current_time
-            bias_row = df_bias[df_bias['timestamp'] <= current_time].iloc[-1:]
+            bias_row = df_bias_shifted[df_bias_shifted['timestamp'] <= current_time].iloc[-1:]
             if not bias_row.empty:
                 htf_idx = bias_row.index[0]
                 local_fvg_htf = {
@@ -103,6 +109,13 @@ class Backtester:
                 }
             else:
                 local_fvg_htf = {}
+
+            # Institutional filter: only call LLM if there's an active unmitigated FVG or OB nearby
+            active_fvg = any(v == 1 or v == -1 for v in local_fvg['FVG'].values())
+            active_ob = any(v == 1 or v == -1 for v in local_ob['OB'].values())
+
+            if not (active_fvg or active_ob):
+                continue
 
             market_summary = {
                 "price": current_candle['close'],
@@ -117,7 +130,10 @@ class Backtester:
             }
             
             setup_json = self.brain.generate_hypothesis(json.dumps(market_summary))
-            setup = json.loads(setup_json)
+            try:
+                setup = json.loads(setup_json)
+            except:
+                setup = {}
             
             if setup.get('side') in ['Long', 'Short']:
                 if setup['side'] == bias or bias == "Neutral":
@@ -168,7 +184,26 @@ class Backtester:
             pnl = abs(t['take_profit'] - t['entry_price']) * t['position_size'] if hit_tp else -abs(t['entry_price'] - t['stop_loss']) * t['position_size']
             self.balance += pnl
             self.trades_history.append({"result": result, "pnl": pnl, "timestamp": candle['timestamp']})
-            self.memory.update_trade_result(t['id'], result, pnl, "")
+
+            # Reflection via brain for failures
+            reflection = ""
+            if result == 'failure':
+                reflection = self.brain.reflect_on_failure(t, result)
+                # Store in mempalace for failure analysis
+                self.memory.store_pattern("failures", f"trade_{t['id']}", {
+                    "trade": t,
+                    "outcome": result,
+                    "pnl": pnl,
+                    "reflection": reflection
+                })
+            else:
+                self.memory.store_pattern("successes", f"trade_{t['id']}", {
+                    "trade": t,
+                    "outcome": result,
+                    "pnl": pnl
+                })
+
+            self.memory.update_trade_result(t['id'], result, pnl, reflection)
             self.current_trade = None
 
     def final_report(self):
@@ -187,7 +222,7 @@ class Backtester:
         }
         
         # ACEO STATE UPDATE
-        state_path = 'e:/TRADING/agency_state.json'
+        state_path = './agency_state.json'
         with open(state_path, 'r') as f:
             state = json.load(f)
         
@@ -208,8 +243,8 @@ class Backtester:
             print("No trades executed.")
 
 if __name__ == "__main__":
-    state_path = 'e:/TRADING/agency_state.json'
-    with open('e:/TRADING/top_20_assets.json', 'r') as f:
+    state_path = './agency_state.json'
+    with open('./top_20_assets.json', 'r') as f:
         config = json.load(f)
     
     timeframes = ['5m', '15m', '30m']
