@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 
 class MemoryManager:
-    def __init__(self, db_path='E:/TRADING/logs/trading_memory.db', mempalace_path='E:/TRADING/mempalace'):
+    def __init__(self, db_path='./logs/trading_memory.db', mempalace_path='./mempalace'):
         self.db_path = db_path
         self.mempalace_path = mempalace_path
         self._init_db()

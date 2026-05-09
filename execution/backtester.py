@@ -6,7 +6,7 @@ import sys
 from tqdm import tqdm
 
 # Add root to path for imports
-sys.path.append('E:/TRADING')
+sys.path.append('..')
 
 from data_ingestion import DataIngestor
 from ict_engine import ICTEngine
