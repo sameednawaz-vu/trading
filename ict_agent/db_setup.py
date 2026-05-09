@@ -1,7 +1,7 @@
 import sqlite3
 import os
 
-DB_NAME = r'E:\TRADING\ict_agent\mempalace.db'
+DB_NAME = r'./logs/mempalace.db'
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)

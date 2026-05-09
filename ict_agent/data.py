@@ -4,7 +4,7 @@ import os
 import json
 import time
 
-CACHE_DIR = r"E:\TRADING\ict_agent\data_cache"
+CACHE_DIR = r"./data"
 
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
@@ -20,14 +20,14 @@ def fetch_ohlcv(symbol, timeframe, limit=4000, use_cache=True):
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             return df
 
-    exchange = ccxt.binance({
+    exchange = ccxt.kraken({
         'enableRateLimit': True,
         'options': {'defaultType': 'spot'}
     })
     
-    fetch_symbol = symbol.replace("/", "") if "/" in symbol else symbol
-    if not fetch_symbol.endswith("USDT") and not fetch_symbol.endswith("BUSD"):
-        fetch_symbol = fetch_symbol.replace("USD", "USDT")
+    fetch_symbol = symbol
+    #if not fetch_symbol.endswith("USDT") and not fetch_symbol.endswith("BUSD"):
+        #fetch_symbol = fetch_symbol.replace("USD", "USDT")
     try:
         all_ohlcv = []
         since = exchange.parse8601('2024-01-01T00:00:00Z')
