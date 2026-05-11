@@ -68,6 +68,3 @@ class ICTEngine:
         elif 0 <= hour < 3:
             return "Asian"
         return None
-
-if __name__ == "__main__":
-    pass
