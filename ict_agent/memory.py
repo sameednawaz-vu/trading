@@ -2,7 +2,7 @@ import sqlite3
 import json
 from datetime import datetime
 
-DB_NAME = r'E:\TRADING\ict_agent\mempalace.db'
+DB_NAME = r'./ict_agent/mempalace.db'
 
 class MemPalace:
     def __init__(self, db_name=DB_NAME):
@@ -31,7 +31,6 @@ class MemPalace:
             (pair, timeframe, direction, setup_thesis, entry_price, sl, tp, result, rr, agent_reflection, date)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         '''
-        # result is usually 'WIN' or 'LOSS'
         params = (pair, timeframe, direction, setup_thesis, entry_price, sl, tp, result, rr, agent_reflection, date)
         return self.execute_query(query, params)
 
@@ -49,7 +48,6 @@ class MemPalace:
         return [{"name": r[0], "description": r[1]} for r in rows]
 
     def query_failed_setups(self, pair=None, timeframe=None, limit=5):
-        # Result can be 'LOSS' or 'FAIL'
         query = "SELECT setup_thesis, agent_reflection FROM trades WHERE (result = 'FAIL' OR result = 'LOSS')"
         params = []
         if pair:
@@ -65,7 +63,6 @@ class MemPalace:
         return self.fetch_query(query, tuple(params))
     
     def query_successful_setups(self, pair=None, timeframe=None, limit=5):
-        # Result can be 'SUCCESS' or 'WIN'
         query = "SELECT setup_thesis, agent_reflection FROM trades WHERE (result = 'SUCCESS' OR result = 'WIN')"
         params = []
         if pair:

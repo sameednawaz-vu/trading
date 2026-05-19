@@ -1,13 +1,12 @@
 import sqlite3
 import os
 
-DB_NAME = r'E:\TRADING\ict_agent\mempalace.db'
+DB_NAME = r'./ict_agent/mempalace.db'
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # Create trades table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS trades (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +24,6 @@ def init_db():
         )
     ''')
     
-    # Create reflections table for extended analysis
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reflections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,7 +35,6 @@ def init_db():
         )
     ''')
 
-    # Create mempalace table for learned rules
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS mempalace (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

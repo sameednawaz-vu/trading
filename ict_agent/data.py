@@ -4,7 +4,7 @@ import os
 import json
 import time
 
-CACHE_DIR = r"E:\TRADING\ict_agent\data_cache"
+CACHE_DIR = r"./data_cache"
 
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
@@ -20,14 +20,10 @@ def fetch_ohlcv(symbol, timeframe, limit=4000, use_cache=True):
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             return df
 
-    exchange = ccxt.binance({
+    exchange = ccxt.kraken({
         'enableRateLimit': True,
-        'options': {'defaultType': 'spot'}
     })
     
-    fetch_symbol = symbol.replace("/", "") if "/" in symbol else symbol
-    if not fetch_symbol.endswith("USDT") and not fetch_symbol.endswith("BUSD"):
-        fetch_symbol = fetch_symbol.replace("USD", "USDT")
     try:
         all_ohlcv = []
         since = exchange.parse8601('2024-01-01T00:00:00Z')
@@ -37,10 +33,11 @@ def fetch_ohlcv(symbol, timeframe, limit=4000, use_cache=True):
             retries = 5
             for attempt in range(retries):
                 try:
-                    ohlcv = exchange.fetch_ohlcv(fetch_symbol, timeframe, limit=720, since=since)
+                    # Kraken limits depend on the timeframe and tier, try fetching max 720
+                    ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since=since)
                     break
                 except Exception as e:
-                    if "Too many requests" in str(e) or "EGeneral" in str(e):
+                    if "Too many requests" in str(e) or "Rate limit" in str(e) or "EGeneral" in str(e):
                         wait_time = 2 ** attempt
                         print(f"Rate limited on {symbol} {timeframe}, waiting {wait_time}s...")
                         time.sleep(wait_time)
@@ -52,7 +49,7 @@ def fetch_ohlcv(symbol, timeframe, limit=4000, use_cache=True):
                 
             all_ohlcv.extend(ohlcv)
             since = ohlcv[-1][0] + 1
-            time.sleep(1.0)
+            time.sleep(exchange.rateLimit / 1000)
             
         with open(cache_file, "w") as f:
             json.dump(all_ohlcv[:limit], f)
