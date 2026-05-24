@@ -7,11 +7,11 @@ from datetime import datetime, timedelta
 from tqdm import tqdm
 
 class DataIngestor:
-    def __init__(self, exchange_id='binance'):
+    def __init__(self, exchange_id='kraken'):
         self.exchange = getattr(ccxt, exchange_id)({
             'enableRateLimit': True,
         })
-        self.data_path = 'E:/TRADING/data'
+        self.data_path = './data'
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
 
@@ -59,14 +59,16 @@ class DataIngestor:
         # Remove duplicates
         df = df.drop_duplicates(subset=['timestamp']).sort_values('timestamp')
         
-        filename = f"{symbol.replace('/', '_')}_{timeframe}_full.csv"
+        safe_symbol = symbol.replace('/', '_').replace('USDT', 'USD')
+        filename = f"{safe_symbol}_{timeframe}_full.csv"
         path = os.path.join(self.data_path, filename)
         df.to_csv(path, index=False)
         print(f"Saved {len(df)} rows to {path}")
         return df
 
     def load_full_data(self, symbol, timeframe):
-        filename = f"{symbol.replace('/', '_')}_{timeframe}_full.csv"
+        safe_symbol = symbol.replace('/', '_').replace('USDT', 'USD')
+        filename = f"{safe_symbol}_{timeframe}_full.csv"
         path = os.path.join(self.data_path, filename)
         if os.path.exists(path):
             return pd.read_csv(path, parse_dates=['timestamp'])
@@ -78,11 +80,11 @@ if __name__ == "__main__":
     start = "2025-04-01T00:00:00Z"
     end = "2026-04-25T00:00:00Z"
 
-    with open('E:/TRADING/top_20_assets.json', 'r') as f:
+    with open('./top_20_assets.json', 'r') as f:
         config = json.load(f)
 
     symbols = config['assets']
-    timeframes = ['1h', '30m', '15m', '5m']
+    timeframes = ['1h', '30m', '15m', '5m', '1m']
 
     for symbol in symbols:
         for tf in timeframes:

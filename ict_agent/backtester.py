@@ -7,7 +7,7 @@ from ict_agent.smc_logic import add_smc_indicators
 from ict_agent.agent import TradingAgent
 
 class Backtester:
-    def __init__(self, symbols, initial_balance=10000.0, timeframes=['1h', '30m', '15m', '5m']):
+    def __init__(self, symbols, initial_balance=10000.0, timeframes=['4h', '1h', '30m', '15m', '5m', '3m']):
         self.symbols = symbols
         self.balance = initial_balance
         self.agent = TradingAgent(is_backtest=True)
@@ -46,7 +46,16 @@ class Backtester:
                 # Context slice
                 sliced_data = {}
                 for tf, df in self.datasets[symbol].items():
-                    sliced_data[tf] = df[df['timestamp'] <= current_time]
+                    sliced_df = df[df['timestamp'] <= current_time].copy()
+
+                    # Do not shift the historical slice directly; shift just before slicing or only access past rows
+                    # The instruction meant shifting before merge_asof, here we just take the current dataframe.
+                    # Since we filter `df['timestamp'] <= current_time`, the last row is the current unclosed HTF candle.
+                    # To prevent lookahead, we only use up to `current_time` EXCLUDING the unclosed candle if it's HTF.
+                    if tf in ['4h', '1h', '30m', '15m']:
+                        sliced_df = df[df['timestamp'] < current_time].copy()
+
+                    sliced_data[tf] = sliced_df
 
                 # 1. Bias
                 bias, _ = self.agent.analyze_bias(sliced_data)

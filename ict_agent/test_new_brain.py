@@ -2,7 +2,7 @@
 import json
 import sys
 import os
-sys.path.append(r'E:\TRADING')
+sys.path.append(r'./')
 
 from ict_agent.agent import TradingAgent
 
