@@ -6,7 +6,7 @@ import sys
 from tqdm import tqdm
 
 # Add root to path for imports
-sys.path.append('E:/TRADING')
+sys.path.append('./')
 
 from data_ingestion import DataIngestor
 from ict_engine import ICTEngine
@@ -187,7 +187,7 @@ class Backtester:
         }
         
         # ACEO STATE UPDATE
-        state_path = 'e:/TRADING/agency_state.json'
+        state_path = './agency_state.json'
         with open(state_path, 'r') as f:
             state = json.load(f)
         
@@ -208,8 +208,8 @@ class Backtester:
             print("No trades executed.")
 
 if __name__ == "__main__":
-    state_path = 'e:/TRADING/agency_state.json'
-    with open('e:/TRADING/top_20_assets.json', 'r') as f:
+    state_path = './agency_state.json'
+    with open('./top_20_assets.json', 'r') as f:
         config = json.load(f)
     
     timeframes = ['5m', '15m', '30m']
