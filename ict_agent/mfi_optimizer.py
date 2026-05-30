@@ -41,11 +41,11 @@ def test_mfi_reversion(df_dict, symbol, target_rr):
 def run_optimizer():
     print("🚀 ACEO Phase 1: Deep Edge Optimization (MFI Reversion) 🚀")
     
-    with open('e:/TRADING/top_20_assets.json', 'r') as f:
+    with open('./top_20_assets.json', 'r') as f:
         config = json.load(f)
     assets = config['assets']
     
-    timeframes = ['3m', '5m', '15m', '30m']
+    timeframes = ['3m', '5m', '15m', '30m', '1h']
     rr_targets = [2.0, 3.0, 5.0]
     
     # Define a 3 month window roughly. (2000 5m candles is ~7 days. For 3 months we need ~26000 5m candles).
@@ -111,7 +111,7 @@ def run_optimizer():
                 "profitability": balance - 10000
             })
             
-    with open('e:/TRADING/mfi_optimization_report.json', 'w') as f:
+    with open('./mfi_optimization_report.json', 'w') as f:
         json.dump(results_list, f, indent=4)
     print("\nOptimization Report Saved to mfi_optimization_report.json")
 

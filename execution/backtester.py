@@ -1,12 +1,12 @@
 import pandas as pd
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import sys
 from tqdm import tqdm
 
 # Add root to path for imports
-sys.path.append('E:/TRADING')
+sys.path.append('./')
 
 from data_ingestion import DataIngestor
 from ict_engine import ICTEngine
@@ -187,7 +187,7 @@ class Backtester:
         }
         
         # ACEO STATE UPDATE
-        state_path = 'e:/TRADING/agency_state.json'
+        state_path = './agency_state.json'
         with open(state_path, 'r') as f:
             state = json.load(f)
         
@@ -197,7 +197,7 @@ class Backtester:
         all_wins = sum(a['win_rate'] * a['total_trades'] for a in state['assets_processed'])
         all_trades = sum(a['total_trades'] for a in state['assets_processed'])
         state['current_metrics']['overall_win_rate'] = all_wins / all_trades if all_trades > 0 else 0
-        state['last_checkpoint'] = datetime.utcnow().isoformat()
+        state['last_checkpoint'] = datetime.now(timezone.utc).isoformat()
         
         with open(state_path, 'w') as f:
             json.dump(state, f, indent=4)
@@ -208,11 +208,11 @@ class Backtester:
             print("No trades executed.")
 
 if __name__ == "__main__":
-    state_path = 'e:/TRADING/agency_state.json'
-    with open('e:/TRADING/top_20_assets.json', 'r') as f:
+    state_path = './agency_state.json'
+    with open('./top_20_assets.json', 'r') as f:
         config = json.load(f)
     
-    timeframes = ['5m', '15m', '30m']
+    timeframes = ['3m', '5m', '15m', '30m', '1h']
     for s in config['assets']:
         for tf in timeframes:
             # Check if already processed
