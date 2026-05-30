@@ -12,7 +12,7 @@ def test_nvidia_api():
     }
     
     payload = {
-        "model": "meta/llama-3.1-405b-instruct",
+        "model": "meta/llama-3.3-70b-instruct",
         "messages": [{"role": "user", "content": "Test message. Reply with 'OK'."}],
         "temperature": 0.2,
         "top_p": 0.7,
