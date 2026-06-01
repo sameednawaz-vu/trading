@@ -1,42 +1,68 @@
 import json
 import pandas as pd
 import numpy as np
-import hashlib
-import subprocess
+import requests
 import os
+import time
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class TradingBrain:
     def __init__(self, api_key=None):
-        self.learnings_path = r'E:\TRADING\learnings.txt'
-        # Use JULES_API_KEY_ACCOUNT_2 from .env if available
+        self.learnings_path = './learnings.txt'
         self.api_key = api_key or os.getenv("JULES_API_KEY_ACCOUNT_2")
+        self.nvidia_api_url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        self.model = "meta/llama-3.3-70b-instruct"
 
-    def _call_gemini_cli(self, prompt):
+        self.request_count = 0
+        self.last_request_time = 0
+
+    def _call_llm(self, prompt):
+        if not self.api_key:
+            print("Warning: No NVIDIA API key found.")
+            return None
+            
+        # Rate limiting: 40 RPM -> max 1 req per 1.5 seconds, let's use 2 to be safe
+        now = time.time()
+        elapsed = now - self.last_request_time
+        if elapsed < 2.0:
+            time.sleep(2.0 - elapsed)
+            
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "top_p": 0.7,
+            "max_tokens": 1024,
+            "stream": False
+        }
+
         try:
-            env = os.environ.copy()
-            if self.api_key:
-                env["JULES_API_KEY"] = self.api_key
-            
-            escaped_prompt = prompt.replace('"', '`"').replace('$', '`$')
-            cmd = f'echo "{escaped_prompt}" | gemini -p - -o json'
-            
-            result = subprocess.run(
-                ['powershell.exe', '-NoProfile', '-Command', cmd],
-                capture_output=True, text=True, env=env, timeout=120
-            )
-            if result.returncode == 0:
-                full_json = json.loads(result.stdout.strip())
-                content = full_json.get('response', '')
+            self.last_request_time = time.time()
+            response = requests.post(self.nvidia_api_url, headers=headers, json=payload, timeout=30)
+            if response.status_code == 200:
+                result = response.json()
+                content = result['choices'][0]['message']['content']
+
+                # Try to extract JSON from the response
                 start = content.find('{')
                 end = content.rfind('}')
                 if start != -1 and end != -1:
                     return content[start:end+1]
                 return content
             else:
-                with open(r'E:\TRADING\logs\cli_errors.log', 'a') as f:
-                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {result.returncode}\nError: {result.stderr}\n")
+                print(f"API Error: {response.status_code} - {response.text}")
+                os.makedirs('./logs', exist_ok=True)
+                with open('./logs/cli_errors.log', 'a') as f:
+                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {response.status_code}\nError: {response.text}\n")
         except Exception as e:
-            print(f"CLI Error: {e}")
+            print(f"Request Error: {e}")
         return None
 
     def generate_hypothesis(self, market_data, context=""):
@@ -44,7 +70,6 @@ class TradingBrain:
             data = json.loads(market_data) if isinstance(market_data, str) else market_data
             
             # --- STAGE 1: INSTITUTIONAL FILTER v18.0 (Local) ---
-            # Mimicking Jules High-Win setups: Must have Killzone + HTF POI + Sweep
             hypothesis_json = self._institutional_filter_v18(data)
             hypothesis = json.loads(hypothesis_json)
             
@@ -52,7 +77,6 @@ class TradingBrain:
                 return hypothesis_json
 
             # --- STAGE 2: NEURAL BRAIN (Remote) ---
-            # Fresh analysis, no cache, grounded in 'Evolved Student' research
             data_str = json.dumps(data, sort_keys=True)
             learnings = ""
             if os.path.exists(self.learnings_path):
@@ -81,7 +105,7 @@ Review this trade hypothesis triggered by our local Institutional Filter.
 - **CSO**: Technical audit of IDM sweep and BOS.
 - **Eng**: Precision execution on FVG Consequent Encroachment.
 
-FINAL DECISION (JSON):
+FINAL DECISION (JSON) ONLY:
 {{
   "side": "Long" | "Short" | "None",
   "entry_price": float,
@@ -92,7 +116,7 @@ FINAL DECISION (JSON):
   "confidence": float
 }}
 """
-            response = self._call_gemini_cli(prompt)
+            response = self._call_llm(prompt)
             if response:
                 try:
                     res_json = json.loads(response)
@@ -152,7 +176,7 @@ FINAL DECISION (JSON):
 
     def reflect_on_failure(self, trade_details, outcome):
         prompt = f"Analyze failed ICT trade: {json.dumps(trade_details)}. Outcome: {outcome}. Provide a concise 'Corrected Mandate' to prevent this."
-        corrected = self._call_gemini_cli(prompt)
+        corrected = self._call_llm(prompt)
         if corrected:
             with open(self.learnings_path, 'a') as f:
                 f.write(f"\n--- Post-Mortem ({pd.Timestamp.now()}) ---\n{corrected.strip()}\n")
