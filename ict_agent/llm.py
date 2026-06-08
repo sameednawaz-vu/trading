@@ -1,80 +1,72 @@
 import os
 import json
-import time
-import subprocess
-import tempfile
+import requests
+from datetime import datetime, timezone
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class LLMIntegration:
     def __init__(self):
-        # The audit mentioned JULES_API_KEY might be needed by the CLI
-        self.api_key = os.getenv("JULES_API_KEY_ACCOUNT_2")
+        self.api_key = os.getenv("JULES_API_KEY_ACCOUNT_2") or os.getenv("JULES_API_KEY")
+        self.api_url = "https://integrate.api.nvidia.com/v1/chat/completions"
 
-    def _call_gemini_cli(self, prompt):
-        try:
-            env = os.environ.copy()
-            if self.api_key:
-                # Ensure the CLI gets the key it expects. 
-                # If it's gemini-cli, it might need GEMINI_API_KEY
-                env["GEMINI_API_KEY"] = self.api_key
-                env["JULES_API_KEY"] = self.api_key
+    def _call_llm_api(self, prompt):
+        if not self.api_key:
+            print("Error: NVIDIA API Key not found.")
+            return None
             
-            # Use a temporary file to avoid shell escaping issues with large prompts
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as tf:
-                tf.write(prompt)
-                temp_name = tf.name
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
 
-            try:
-                # Run gemini command using the file as input
-                # -p - tells gemini to read from stdin, but we can also use -p <prompt>
-                # However, for very large prompts, we'll pipe the file
-                with open(temp_name, 'r', encoding='utf-8') as pf:
-                    result = subprocess.run(
-                        ['gemini', '--prompt', '-', '--output-format', 'json', '--skip-trust'],
-                        stdin=pf,
-                        capture_output=True, 
-                        text=True, 
-                        env=env, 
-                        timeout=180
-                    )
+        payload = {
+            "model": "meta/llama-3.3-70b-instruct",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "top_p": 0.7,
+            "max_tokens": 1024,
+            "stream": False
+        }
+
+        try:
+            response = requests.post(self.api_url, headers=headers, json=payload, timeout=60)
+            if response.status_code == 200:
+                resp_json = response.json()
+                content = resp_json['choices'][0]['message']['content']
                 
-                if result.returncode == 0:
-                    try:
-                        full_json = json.loads(result.stdout.strip())
-                        # Gemini CLI JSON output usually has a 'response' field
-                        content = full_json.get('response', '')
-                        
-                        # Extract inner JSON if the model wrapped it in markdown
-                        start = content.find('{')
-                        end = content.rfind('}')
-                        if start != -1 and end != -1:
-                            return content[start:end+1]
-                        return content
-                    except json.JSONDecodeError:
-                        # Fallback if stdout is not JSON but the raw response
-                        return result.stdout.strip()
-                else:
-                    print(f"CLI Error {result.returncode}: {result.stderr}")
-            finally:
-                if os.path.exists(temp_name):
-                    os.remove(temp_name)
-                    
+                start = content.find('{')
+                end = content.rfind('}')
+                if start != -1 and end != -1:
+                    return content[start:end+1]
+                return content
+            else:
+                os.makedirs('./logs', exist_ok=True)
+                with open('./logs/cli_errors.log', 'a') as f:
+                    f.write(f"\n--- {datetime.now(timezone.utc)} ---\nStatus Code: {response.status_code}\nError: {response.text}\n")
+                print(f"API Error: {response.status_code} - {response.text}")
         except Exception as e:
-            print(f"Subprocess Error: {e}")
+            print(f"Request Error: {e}")
         return None
 
     def generate_response(self, system_prompt, user_prompt):
         full_prompt = f"{system_prompt}\n\n{user_prompt}"
-        return self._call_gemini_cli(full_prompt)
+        return self._call_llm_api(full_prompt)
 
     def parse_json_response(self, text):
         if not text: return None
         try:
             return json.loads(text)
         except:
-            # Naive cleanup
             start = text.find('{')
             end = text.rfind('}')
             if start != -1 and end != -1:
                 try: return json.loads(text[start:end+1])
                 except: pass
         return None
+
+if __name__ == "__main__":
+    llm = LLMIntegration()
+    # Simple syntax check, without full API key execution
+    print("LLMIntegration class loaded successfully")

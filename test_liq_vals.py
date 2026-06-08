@@ -1,15 +1,16 @@
-
 import pandas as pd
 from smartmoneyconcepts import smc
 
 def test_liq():
-    df = pd.read_csv('e:/TRADING/data/BTC_USDT_5m_full.csv').tail(1000)
-    df.columns = [col.lower() for col in df.columns]
-    swing_hl = smc.swing_highs_lows(df, swing_length=50)
+    df = pd.DataFrame({
+        'open': [100, 102, 101, 103, 102],
+        'high': [102, 104, 103, 105, 104],
+        'low': [99, 101, 100, 102, 101],
+        'close': [101, 103, 102, 104, 103],
+        'volume': [10, 20, 15, 25, 20]
+    })
+    swing_hl = smc.swing_highs_lows(df, swing_length=2)
     liquidity = smc.liquidity(df, swing_hl)
-    print("Liquidity Columns:", liquidity.columns.tolist())
-    print("Swept Value Counts:\n", liquidity['Swept'].value_counts())
-    print("Sample rows where Swept != 0:\n", liquidity[liquidity['Swept'] != 0].tail(10))
-
-if __name__ == "__main__":
-    test_liq()
+    assert 'Liquidity' in liquidity.columns
+    assert 'Level' in liquidity.columns
+    assert 'Swept' in liquidity.columns

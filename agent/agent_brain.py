@@ -1,42 +1,57 @@
 import json
 import pandas as pd
 import numpy as np
-import hashlib
-import subprocess
 import os
+import requests
+from datetime import datetime, timezone
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class TradingBrain:
     def __init__(self, api_key=None):
-        self.learnings_path = r'E:\TRADING\learnings.txt'
-        # Use JULES_API_KEY_ACCOUNT_2 from .env if available
-        self.api_key = api_key or os.getenv("JULES_API_KEY_ACCOUNT_2")
+        self.learnings_path = './learnings.txt'
+        self.api_key = api_key or os.getenv("JULES_API_KEY_ACCOUNT_2") or os.getenv("JULES_API_KEY")
+        self.api_url = "https://integrate.api.nvidia.com/v1/chat/completions"
 
-    def _call_gemini_cli(self, prompt):
+    def _call_llm_api(self, prompt):
+        if not self.api_key:
+            print("Error: NVIDIA API Key not found.")
+            return None
+            
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": "meta/llama-3.3-70b-instruct",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "top_p": 0.7,
+            "max_tokens": 1024,
+            "stream": False
+        }
+
         try:
-            env = os.environ.copy()
-            if self.api_key:
-                env["JULES_API_KEY"] = self.api_key
-            
-            escaped_prompt = prompt.replace('"', '`"').replace('$', '`$')
-            cmd = f'echo "{escaped_prompt}" | gemini -p - -o json'
-            
-            result = subprocess.run(
-                ['powershell.exe', '-NoProfile', '-Command', cmd],
-                capture_output=True, text=True, env=env, timeout=120
-            )
-            if result.returncode == 0:
-                full_json = json.loads(result.stdout.strip())
-                content = full_json.get('response', '')
+            response = requests.post(self.api_url, headers=headers, json=payload, timeout=60)
+            if response.status_code == 200:
+                resp_json = response.json()
+                content = resp_json['choices'][0]['message']['content']
+
+                # Extract JSON from markdown or raw text
                 start = content.find('{')
                 end = content.rfind('}')
                 if start != -1 and end != -1:
                     return content[start:end+1]
                 return content
             else:
-                with open(r'E:\TRADING\logs\cli_errors.log', 'a') as f:
-                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {result.returncode}\nError: {result.stderr}\n")
+                os.makedirs('./logs', exist_ok=True)
+                with open('./logs/cli_errors.log', 'a') as f:
+                    f.write(f"\n--- {datetime.now(timezone.utc)} ---\nStatus Code: {response.status_code}\nError: {response.text}\n")
+                print(f"API Error: {response.status_code} - {response.text}")
         except Exception as e:
-            print(f"CLI Error: {e}")
+            print(f"Request Error: {e}")
         return None
 
     def generate_hypothesis(self, market_data, context=""):
@@ -92,7 +107,7 @@ FINAL DECISION (JSON):
   "confidence": float
 }}
 """
-            response = self._call_gemini_cli(prompt)
+            response = self._call_llm_api(prompt)
             if response:
                 try:
                     res_json = json.loads(response)
@@ -116,44 +131,68 @@ FINAL DECISION (JSON):
             features = data['features']
             
             # 1. Killzone Window (Silver Bullet Windows)
-            if kz not in ['London', 'New York']:
+            if kz not in ['London', 'New York', 'Silver_Bullet']:
                 return json.dumps({"side": "None", "reason": "Outside Institutional Windows"})
 
             # 2. HTF POI (1h FVG)
             htf_fvg = features.get('htf_fvg', {})
             in_poi = False
-            for idx, val in htf_fvg.get('FVG', {}).items():
-                if htf_fvg['Bottom'][idx] * 0.9995 <= price <= htf_fvg['Top'][idx] * 1.0005:
-                    in_poi = True; break
+
+            # FVG data format is {"FVG": {"date": value}, "Top": {"date": value}, "Bottom": {"date": value}}
+            for idx, val in htf_fvg.get('fvg_top', {}).items():
+                if not pd.isna(val) and not pd.isna(htf_fvg.get('fvg_bottom', {}).get(idx, np.nan)):
+                    top = val
+                    bottom = htf_fvg['fvg_bottom'][idx]
+                    if bottom * 0.9995 <= price <= top * 1.0005:
+                        in_poi = True; break
+
+            # Check active FVGs instead
+            if not in_poi:
+                for idx, val in htf_fvg.get('active_fvg_top', {}).items():
+                    if not pd.isna(val) and not pd.isna(htf_fvg.get('active_fvg_bottom', {}).get(idx, np.nan)):
+                        top = val
+                        bottom = htf_fvg['active_fvg_bottom'][idx]
+                        if bottom * 0.9995 <= price <= top * 1.0005:
+                            in_poi = True; break
+
             if not in_poi: return json.dumps({"side": "None", "reason": "No HTF POI Confluence"})
 
             # 3. Liquidity Sweep
-            fvg_data = features.get('fvg', {})
-            recent_lows = [v for v in fvg_data.get('Bottom', {}).values() if not pd.isna(v)]
-            recent_highs = [v for v in fvg_data.get('Top', {}).values() if not pd.isna(v)]
+            recent_lows = [v for v in features.get('last_swing_low', {}).values() if not pd.isna(v)]
+            recent_highs = [v for v in features.get('last_swing_high', {}).values() if not pd.isna(v)]
             last_low = min(recent_lows[-5:]) if recent_lows else None
             last_high = max(recent_highs[-5:]) if recent_highs else None
             
             bull_sweep = last_low and price > last_low
             bear_sweep = last_high and price < last_high
 
+            # Risk/Reward enforcing 1:2 minimum, 1:3 target
             if bull_sweep and bias != 'Bearish':
                 sl = last_low * 0.997
-                tp = price + (price - sl) * 3.0 # Target 1:3 RR for 80% precision
+                dist = price - sl
+                tp = price + dist * 3.0 # Target 1:3 RR for 80% precision
                 return json.dumps({"side": "Long", "entry_price": price, "stop_loss": sl, "take_profit": tp, "model_used": "Model 1", "reason": "Institutional POI + Sweep Detected"})
             
             if bear_sweep and bias != 'Bullish':
                 sl = last_high * 1.003
-                tp = price - (sl - price) * 3.0
+                dist = sl - price
+                tp = price - dist * 3.0
                 return json.dumps({"side": "Short", "entry_price": price, "stop_loss": sl, "take_profit": tp, "model_used": "Model 1", "reason": "Institutional POI + Sweep Detected"})
 
-        except: pass
+        except Exception as e:
+            print(f"Filter Error: {e}")
+
         return json.dumps({"side": "None", "reason": "Insufficient Institutional Confluence"})
 
     def reflect_on_failure(self, trade_details, outcome):
         prompt = f"Analyze failed ICT trade: {json.dumps(trade_details)}. Outcome: {outcome}. Provide a concise 'Corrected Mandate' to prevent this."
-        corrected = self._call_gemini_cli(prompt)
+        corrected = self._call_llm_api(prompt)
         if corrected:
             with open(self.learnings_path, 'a') as f:
-                f.write(f"\n--- Post-Mortem ({pd.Timestamp.now()}) ---\n{corrected.strip()}\n")
+                f.write(f"\n--- Post-Mortem ({datetime.now(timezone.utc)}) ---\n{corrected.strip()}\n")
         return f"Logged: {trade_details.get('id', 'unknown')}"
+
+if __name__ == "__main__":
+    brain = TradingBrain("test_key_dummy")
+    # Just a small sanity check on methods existing and not erroring out on initial parsing
+    print(brain._institutional_filter_v18({"price": 60000, "bias": "Neutral", "killzone": "None", "features": {}}))

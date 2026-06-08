@@ -1,15 +1,16 @@
-
 import pandas as pd
 from smartmoneyconcepts import smc
 
 def test_swing():
-    df = pd.read_csv('e:/TRADING/data/BTC_USDT_5m_full.csv').tail(1000)
-    df.columns = [col.lower() for col in df.columns]
-    swing_hl = smc.swing_highs_lows(df, swing_length=20)
-    print("Swing HL Columns:", swing_hl.columns.tolist())
-    print("High Counts:\n", swing_hl['High'].value_counts())
-    print("Low Counts:\n", swing_hl['Low'].value_counts())
-    print(swing_hl[swing_hl['High'] != 0].tail(5))
-
-if __name__ == "__main__":
-    test_swing()
+    # Make some dummy data since test depends on absolute non-existent paths
+    df = pd.DataFrame({
+        'open': [100, 102, 101, 103, 102],
+        'high': [102, 104, 103, 105, 104],
+        'low': [99, 101, 100, 102, 101],
+        'close': [101, 103, 102, 104, 103],
+        'volume': [10, 20, 15, 25, 20]
+    })
+    swing_hl = smc.swing_highs_lows(df, swing_length=2)
+    # Testing that it returns the expected columns per our fix
+    assert 'HighLow' in swing_hl.columns
+    assert 'Level' in swing_hl.columns

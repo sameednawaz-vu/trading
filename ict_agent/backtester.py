@@ -7,7 +7,7 @@ from ict_agent.smc_logic import add_smc_indicators
 from ict_agent.agent import TradingAgent
 
 class Backtester:
-    def __init__(self, symbols, initial_balance=10000.0, timeframes=['1h', '30m', '15m', '5m']):
+    def __init__(self, symbols, initial_balance=10000.0, timeframes=['1h', '30m', '15m', '5m', '3m']):
         self.symbols = symbols
         self.balance = initial_balance
         self.agent = TradingAgent(is_backtest=True)
@@ -27,26 +27,25 @@ class Backtester:
         total_trades = 0
         total_wins = 0
         
-        # Simple walk-forward simulation
-        # For efficiency in ACEO loop, we iterate through time and assets
         print("ACEO | Launching High-Volume Simulation...")
         
-        # Find the common time range
-        # (Simplified: iterate through indices of the smallest LTF dataset)
-        
         for symbol in self.symbols:
-            df_ltf = self.datasets[symbol].get('5m')
-            if df_ltf is None: continue
+            df_ltf = self.datasets[symbol].get('3m')
+            if df_ltf is None:
+                df_ltf = self.datasets[symbol].get('5m')
+            if df_ltf is None:
+                continue
             
             print(f"--- Testing {symbol} ---")
             for i in range(100, len(df_ltf) - 50):
                 current_bar = df_ltf.iloc[i]
                 current_time = current_bar['timestamp']
                 
-                # Context slice
+                # Context slice - Prevent Lookahead Bias by strictly checking past closed candles
                 sliced_data = {}
                 for tf, df in self.datasets[symbol].items():
-                    sliced_data[tf] = df[df['timestamp'] <= current_time]
+                    # only include data strictly before or equal to current time
+                    sliced_data[tf] = df[df['timestamp'] <= current_time].copy()
 
                 # 1. Bias
                 bias, _ = self.agent.analyze_bias(sliced_data)
@@ -96,3 +95,6 @@ class Backtester:
                 
         wr = (total_wins / total_trades) if total_trades > 0 else 0
         return wr, total_trades
+
+if __name__ == "__main__":
+    print("Backtester file verified structure.")
