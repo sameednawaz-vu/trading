@@ -13,3 +13,10 @@ ranking_state.json
 strategy_leaderboard.json
 mfi_optimization_report.json
 top_20_assets.json
+data_cache/
+data/
+reports/
+logs/
+mempalace/
+*.json
+.env

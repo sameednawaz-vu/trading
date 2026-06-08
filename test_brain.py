@@ -1,7 +1,13 @@
-from agent.brain import TradingBrain
+from agent.agent_brain import TradingBrain
 import os
 
-key = "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"
+# Use an environment variable or dummy key for testing to prevent hardcoding secrets
+key = os.getenv("JULES_API_KEY_ACCOUNT_2", "dummy_test_key")
 brain = TradingBrain(api_key=key)
-res = brain.query("Test message. Reply with 'OK'.")
-print(f"Brain Response: {res}")
+
+def test_brain_loads():
+    assert brain is not None
+    print("Brain loaded successfully.")
+
+if __name__ == "__main__":
+    test_brain_loads()

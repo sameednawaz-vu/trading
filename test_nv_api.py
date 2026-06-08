@@ -1,10 +1,10 @@
-
 import requests
 import json
+import os
 
 def test_nvidia_api():
     url = "https://integrate.api.nvidia.com/v1/chat/completions"
-    api_key = "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"
+    api_key = os.getenv("JULES_API_KEY_ACCOUNT_2", "dummy_test_key")
     
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -12,7 +12,7 @@ def test_nvidia_api():
     }
     
     payload = {
-        "model": "meta/llama-3.1-405b-instruct",
+        "model": "meta/llama-3.3-70b-instruct",
         "messages": [{"role": "user", "content": "Test message. Reply with 'OK'."}],
         "temperature": 0.2,
         "top_p": 0.7,
@@ -24,7 +24,9 @@ def test_nvidia_api():
         print("Sending request to Nvidia API...")
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         print(f"Status Code: {response.status_code}")
-        print(f"Response: {response.text}")
+        # Only print full text if it's not a generic auth failure
+        if response.status_code == 200:
+            print(f"Response: {response.text}")
     except Exception as e:
         print(f"Error: {e}")
 
