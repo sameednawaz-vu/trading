@@ -3,15 +3,15 @@ import pandas as pd
 import os
 import time
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from tqdm import tqdm
 
 class DataIngestor:
-    def __init__(self, exchange_id='binance'):
+    def __init__(self, exchange_id='kraken'):
         self.exchange = getattr(ccxt, exchange_id)({
             'enableRateLimit': True,
         })
-        self.data_path = 'E:/TRADING/data'
+        self.data_path = './data'
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
 
@@ -22,21 +22,18 @@ class DataIngestor:
         
         all_ohlcv = []
         
-        # Calculate total estimated iterations for progress bar
-        # (Approximate, depends on limit per call)
         print(f"Syncing {symbol} {timeframe} from {start_date_str} to {end_date_str}...")
         
         pbar = tqdm(total=end_timestamp - since, unit='ms', desc=f"{symbol} {timeframe}")
         
         while since < end_timestamp:
             try:
-                limit = 1000
+                limit = 720 # Kraken has lower limits usually
                 ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
                 if not ohlcv:
                     break
                 
                 last_timestamp = ohlcv[-1][0]
-                # Update progress
                 pbar.update(last_timestamp - since)
                 since = last_timestamp + 1
                 
@@ -54,8 +51,13 @@ class DataIngestor:
         
         pbar.close()
         
+        if not all_ohlcv:
+            print(f"No data fetched for {symbol} {timeframe}")
+            return None
+
         df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms').dt.tz_localize('UTC')
+
         # Remove duplicates
         df = df.drop_duplicates(subset=['timestamp']).sort_values('timestamp')
         
@@ -65,25 +67,60 @@ class DataIngestor:
         print(f"Saved {len(df)} rows to {path}")
         return df
 
+    def resample_1m_to_3m(self, df_1m, symbol):
+        """Resamples 1-minute dataframe to 3-minute dataframe."""
+        if df_1m is None or df_1m.empty:
+            return None
+
+        df = df_1m.set_index('timestamp')
+        df_3m = df.resample('3min').agg({
+            'open': 'first',
+            'high': 'max',
+            'low': 'min',
+            'close': 'last',
+            'volume': 'sum'
+        }).dropna()
+
+        df_3m = df_3m.reset_index()
+
+        filename = f"{symbol.replace('/', '_')}_3m_full.csv"
+        path = os.path.join(self.data_path, filename)
+        df_3m.to_csv(path, index=False)
+        print(f"Saved {len(df_3m)} rows to {path} (resampled to 3m)")
+        return df_3m
+
     def load_full_data(self, symbol, timeframe):
         filename = f"{symbol.replace('/', '_')}_{timeframe}_full.csv"
         path = os.path.join(self.data_path, filename)
         if os.path.exists(path):
-            return pd.read_csv(path, parse_dates=['timestamp'])
+            df = pd.read_csv(path, parse_dates=['timestamp'])
+            if df['timestamp'].dt.tz is None:
+                df['timestamp'] = df['timestamp'].dt.tz_localize('UTC')
+            return df
         return None
 
 if __name__ == "__main__":
     ingestor = DataIngestor()
-    # Fetching 1 year of data: April 2025 back to April 2024
-    start = "2025-04-01T00:00:00Z"
-    end = "2026-04-25T00:00:00Z"
+    # Fetching 1 year of data: back to 1 year ago from today
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=365)
 
-    with open('E:/TRADING/top_20_assets.json', 'r') as f:
+    start = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+    end = end_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    with open('./top_20_assets.json', 'r') as f:
         config = json.load(f)
 
     symbols = config['assets']
-    timeframes = ['1h', '30m', '15m', '5m']
+    timeframes = ['1h', '30m', '15m', '5m', '1m']
 
     for symbol in symbols:
+        df_1m = None
         for tf in timeframes:
-            ingestor.fetch_historical_data(symbol, tf, start, end)
+            df = ingestor.fetch_historical_data(symbol, tf, start, end)
+            if tf == '1m':
+                df_1m = df
+
+        # Create 3m data
+        if df_1m is not None:
+            ingestor.resample_1m_to_3m(df_1m, symbol)
