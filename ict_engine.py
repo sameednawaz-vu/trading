@@ -10,7 +10,8 @@ class ICTEngine:
         Computes SMC features using the smartmoneyconcepts library.
         Expects columns: open, high, low, close, volume.
         """
-        # Ensure column names are lowercase
+        # Ensure column names are lowercase and copy df
+        df = df.copy()
         df.columns = [col.lower() for col in df.columns]
         
         # Fair Value Gaps
@@ -41,6 +42,8 @@ class ICTEngine:
         Determines the directional bias (Bullish/Bearish/Neutral) 
         based on recent Market Structure (BOS/CHoCH).
         """
+        df = df.copy()
+        df.columns = [col.lower() for col in df.columns]
         swing_hl = smc.swing_highs_lows(df, swing_length=20)
         bos_choch = smc.bos_choch(df, swing_hl)
         

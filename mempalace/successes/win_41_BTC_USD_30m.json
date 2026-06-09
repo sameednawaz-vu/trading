@@ -1,0 +1,19 @@
+{
+    "symbol": "BTC/USD",
+    "timeframe": "30m",
+    "side": "Long",
+    "entry_price": 63179.1,
+    "stop_loss": 62755.0,
+    "take_profit": 64271.7,
+    "position_size": 0.23579344494223142,
+    "timestamp": "2026-06-04 13:00:00+00:00",
+    "setup_details": {
+        "side": "Long",
+        "entry_price": 63179.1,
+        "stop_loss": 62755.0,
+        "take_profit": 64271.7,
+        "reason": "Institutional audit identifying potential support and resistance levels via FVGs, with an inferred liquidity sweep and adherence to a 1:2 risk-to-reward ratio.",
+        "confidence": 0.7
+    },
+    "id": 41
+}

@@ -1,0 +1,18 @@
+{
+    "symbol": "ETH/USD",
+    "timeframe": "5m",
+    "side": "Long",
+    "entry_price": 1669.23,
+    "stop_loss": 1661.002,
+    "take_profit": 1693.9140000000002,
+    "position_size": 12.518230432668835,
+    "timestamp": "2026-06-08 12:00:00+00:00",
+    "setup_details": {
+        "side": "Long",
+        "entry_price": 1669.23,
+        "stop_loss": 1661.002,
+        "take_profit": 1693.9140000000002,
+        "reason": "Institutional POI + Sweep Detected"
+    },
+    "id": 45
+}

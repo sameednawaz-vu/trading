@@ -1,0 +1,18 @@
+{
+    "symbol": "BTC/USD",
+    "timeframe": "15m",
+    "side": "Short",
+    "entry_price": 61870.6,
+    "stop_loss": 62892.21229999999,
+    "take_profit": 58805.76310000002,
+    "position_size": 0.0969056461046922,
+    "timestamp": "2026-06-07 12:45:00+00:00",
+    "setup_details": {
+        "side": "Short",
+        "entry_price": 61870.6,
+        "stop_loss": 62892.21229999999,
+        "take_profit": 58805.76310000002,
+        "reason": "Institutional POI + Sweep Detected"
+    },
+    "id": 40
+}
