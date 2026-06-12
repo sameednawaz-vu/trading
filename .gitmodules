@@ -1,0 +1,15 @@
+[submodule "skills/gstack_repo"]
+	path = skills/gstack_repo
+	url = https://github.com/garrytan/gstack
+[submodule "skills/claude-mem"]
+	path = skills/claude-mem
+	url = https://github.com/thedotmack/claude-mem
+[submodule "skills/openspace_repo"]
+	path = skills/openspace_repo
+	url = https://github.com/HKUDS/OpenSpace
+[submodule "skills/superpowers_repo"]
+	path = skills/superpowers_repo
+	url = https://github.com/obra/superpowers
+[submodule "skills/mempalace"]
+	path = skills/mempalace
+	url = https://github.com/MemPalace/mempalace
