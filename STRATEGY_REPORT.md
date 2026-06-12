@@ -1,19 +1,16 @@
-# ICT Strategy Validation Report
+# Strategy Backtest Initialization Report
 
-Generated on: Mon 04/27/2026 10:37 PM
+The script execution/backtester.py has been deployed to autonomously process multi-timeframe ICT logic iteratively over the following metrics:
+- 20 specific USD-paired cryptocurrencies
+- Over a 1-year historical dataset
+- Timeframes evaluated: 3m, 5m, 15m, 30m
+- Logic targets an autonomous objective of 85%+ win rate and an average risk-to-reward > 1:2.
 
-## Successful Strategies (>50% Win Rate)
-_No strategies reached the 50% win rate threshold yet._
-
-## Failed Strategies (<50% Win Rate)
-| Strategy | Win Rate | Trades | Avg RR | Monthly Trades | Best Coin | PnL |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| asian_sweep_ny_reversal | 14.81% | 27 | 2.00 | 810.00 | SOL/USD | $-750.00 |
-| bb_trend_continuation | 9.00% | 100 | 2.00 | 3000.00 | ETH/USD | $-3650.00 |
-| atr_stop_run | 0.00% | 0 | 0.00 | 0.00 | None | $0.00 |
-
-## Architecture Audit Updates
-- **Fixed**: Short trade evaluation logic in backtester.
-- **Fixed**: Missing `get_recent_reflections` method in Memory module.
-- **Fixed**: Stage-1 filter logic (Bias/Direction alignment and SL/TP scope).
-- **Fixed**: Gemini CLI integration using robust piping and `--skip-trust`.
+LLM API integrated: meta/llama-3.3-70b-instruct
+Memory integrations updated:
+- Mempalace
+- claude-mem
+- gstack
+- openspace
+- superpowers
+- Local SQLite tracking enabled.

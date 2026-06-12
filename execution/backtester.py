@@ -1,226 +1,194 @@
 import pandas as pd
 import json
-from datetime import datetime
 import os
-import sys
+import time
 from tqdm import tqdm
-
-# Add root to path for imports
-sys.path.append('E:/TRADING')
-
-from data_ingestion import DataIngestor
-from ict_engine import ICTEngine
-from agent.memory import MemoryManager
 from agent.brain import TradingBrain
+from ict_engine import ICTEngine
 
 class Backtester:
-    def __init__(self, symbol, execution_tf='5m', bias_tf='1h', start_balance=10000):
-        self.symbol = symbol
-        self.execution_tf = execution_tf
-        self.bias_tf = bias_tf
-        self.balance = start_balance
-        self.ingestor = DataIngestor()
-        self.ict = ICTEngine()
-        self.memory = MemoryManager()
+    def __init__(self, start_date_str, end_date_str):
         self.brain = TradingBrain()
-        self.current_trade = None
-        self.trades_history = []
-
-    def load_full_data(self):
-        df_exec = self.ingestor.load_full_data(self.symbol, self.execution_tf)
-        df_bias = self.ingestor.load_full_data(self.symbol, self.bias_tf)
-        return df_exec, df_bias
-
-    def run(self):
-        df_exec, df_bias = self.load_full_data()
-        if df_exec is None or df_bias is None:
-            print(f"Full data for {self.symbol} not found.")
-            return
-
-        print(f"Starting High-Volume Backtest for {self.symbol}...")
+        self.engine = ICTEngine()
+        self.data_path = './data'
+        self.state_path = './agency_state.json'
         
-        # Pre-compute all features (Optimized: compute once for the whole year)
-        print(f"Pre-computing {self.bias_tf} features...")
-        bias_features = self.ict.compute_smc_features(df_bias)
-        print(f"Pre-computing {self.execution_tf} features...")
-        exec_features = self.ict.compute_smc_features(df_exec)
+        self.start_dt = pd.to_datetime(start_date_str, utc=True)
+        self.end_dt = pd.to_datetime(end_date_str, utc=True)
         
-        df_exec['timestamp'] = pd.to_datetime(df_exec['timestamp'])
-        df_bias['timestamp'] = pd.to_datetime(df_bias['timestamp'])
+        self.symbols = [
+            'BTC_USD', 'ETH_USD', 'SOL_USD', 'BNB_USD', 'XRP_USD',
+            'ADA_USD', 'ALGO_USD', 'APE_USD', 'ATOM_USD', 'AVAX_USD',
+            'BCH_USD', 'DOGE_USD', 'DOT_USD', 'DAI_USD', 'CRO_USD',
+            'UNI_USD', 'LINK_USD', 'LTC_USD', 'MATIC_USD', 'NEAR_USD'
+        ]
         
-        # Start after enough data for indicators
-        start_idx = 500
-        bias = "Neutral"
+        self.timeframes = ['3m', '5m', '15m', '30m']
         
-        # Progress bar for the whole year
-        for i in tqdm(range(start_idx, len(df_exec)), desc=f"Backtesting {self.symbol}"):
-            current_time = df_exec.iloc[i]['timestamp']
-            current_candle = df_exec.iloc[i]
-            
-            if self.current_trade:
-                self.manage_trade(current_candle)
-                continue
+    def _load_state(self):
+        if os.path.exists(self.state_path):
+             with open(self.state_path, 'r') as f:
+                  return json.load(f)
+        return {"total_trades": 0, "wins": 0, "losses": 0, "win_rate": 0, "avg_rr": 0, "monthly_trades": 0, "history": []}
 
-            # Bias (HTF) - Update only every hour for speed
-            if i == start_idx or current_time.minute == 0:
-                bias_idx_slice = df_bias[df_bias['timestamp'] <= current_time]
-                if len(bias_idx_slice) >= 50:
-                    last_bias_idx = bias_idx_slice.index[-1]
-                    bias_window = df_bias.iloc[last_bias_idx-50:last_bias_idx]
-                    bias = self.ict.get_bias(bias_window)
+    def _save_state(self, state):
+        with open(self.state_path, 'w') as f:
+             json.dump(state, f, indent=4)
 
-            # Execution logic (LTF)
-            # Use pre-computed FVG/OB/Liquidity for index i
-            lookback = 50
-            local_fvg = {
-                'FVG': exec_features['fvg']['FVG'].iloc[i-lookback:i].to_dict(),
-                'Top': exec_features['fvg']['Top'].iloc[i-lookback:i].to_dict(),
-                'Bottom': exec_features['fvg']['Bottom'].iloc[i-lookback:i].to_dict(),
-                'MitigatedIndex': exec_features['fvg']['MitigatedIndex'].iloc[i-lookback:i].to_dict()
+    def _get_htf_data(self, htf_df, current_time):
+         past_htf = htf_df[htf_df['timestamp'] < current_time]
+         if past_htf.empty:
+             return pd.DataFrame()
+         return past_htf.tail(200).copy()
+
+    def load_data(self, symbol, timeframe):
+        path = os.path.join(self.data_path, f"{symbol}_{timeframe}_full.csv")
+        if os.path.exists(path):
+            df = pd.read_csv(path, parse_dates=['timestamp'])
+            return df[(df['timestamp'] >= self.start_dt) & (df['timestamp'] <= self.end_dt)].copy()
+        return None
+
+    def run_backtest(self, max_runs=1000): # Allow extensive runs to achieve goal
+        for run in range(max_runs):
+            state = self._load_state()
+            print(f"\n--- Backtest Run {run + 1} ---")
+            print(f"Current Metrics - Win Rate: {state['win_rate']}%, Trades: {state['total_trades']}")
+
+            if state['win_rate'] >= 85 and state['monthly_trades'] >= 40:
+                 print("Goals met! Autonomous Backtesting complete.")
+                 break
+
+            trades = []
+            wins = 0
+            losses = 0
+            sum_rr = 0
+
+            for symbol in self.symbols:
+                df_1h = self.load_data(symbol, '1h')
+                if df_1h is None or df_1h.empty:
+                     continue
+
+                for tf in self.timeframes:
+                    df_ltf = self.load_data(symbol, tf)
+                    if df_ltf is None or df_ltf.empty:
+                         continue
+
+                    print(f"Testing {symbol} on {tf}...")
+
+                    start_idx = 100
+                    for i in tqdm(range(start_idx, len(df_ltf))):
+                        current_time = df_ltf.iloc[i]['timestamp']
+                        current_price = df_ltf.iloc[i]['close']
+
+                        kz = self.engine.is_killzone(current_time)
+                        if not kz or kz not in ['London', 'New York']:
+                             continue
+
+                        htf_past = self._get_htf_data(df_1h, current_time)
+                        if htf_past.empty or len(htf_past) < 50:
+                             continue
+
+                        htf_bias = self.engine.get_bias(htf_past)
+                        htf_features = self.engine.compute_smc_features(htf_past)
+
+                        ltf_past = df_ltf.iloc[i-100:i+1].copy()
+                        ltf_features = self.engine.compute_smc_features(ltf_past)
+
+                        market_data = {
+                             "symbol": symbol,
+                             "timeframe": tf,
+                             "time": current_time.isoformat(),
+                             "price": current_price,
+                             "bias": htf_bias,
+                             "killzone": kz,
+                             "features": {
+                                  "htf_fvg": htf_features['fvg'].to_dict() if not htf_features['fvg'].empty else {},
+                                  "fvg": ltf_features['fvg'].to_dict() if not ltf_features['fvg'].empty else {},
+                             }
+                        }
+
+                        hypothesis = self.brain.generate_hypothesis(market_data)
+                        try:
+                             decision = json.loads(hypothesis)
+                        except:
+                             continue
+
+                        if decision.get('side') in ['Long', 'Short']:
+                             entry = decision['entry_price']
+                             sl = decision['stop_loss']
+                             tp = decision['take_profit']
+
+                             rr = abs(tp - entry) / abs(entry - sl) if abs(entry - sl) > 0 else 0
+                             if rr < 2.0:
+                                  continue
+
+                             outcome = 'Pending'
+                             future_data = df_ltf.iloc[i+1:i+100]
+
+                             for _, row in future_data.iterrows():
+                                  high = row['high']
+                                  low = row['low']
+
+                                  if decision['side'] == 'Long':
+                                       if low <= sl: outcome = 'Loss'; break
+                                       if high >= tp: outcome = 'Win'; break
+                                  elif decision['side'] == 'Short':
+                                       if high >= sl: outcome = 'Loss'; break
+                                       if low <= tp: outcome = 'Win'; break
+
+                             if outcome == 'Pending':
+                                  outcome = 'Loss'
+
+                             trade = {
+                                  "id": f"{symbol}_{tf}_{current_time.timestamp()}",
+                                  "side": decision['side'],
+                                  "entry": entry,
+                                  "sl": sl,
+                                  "tp": tp,
+                                  "outcome": outcome,
+                                  "rr": rr,
+                                  "time": current_time.isoformat()
+                             }
+                             trades.append(trade)
+                             self.brain.log_trade(trade['id'], trade['side'], entry, sl, tp, outcome, decision.get('model_used', ''), decision.get('reason', ''))
+
+                             if outcome == 'Win':
+                                  wins += 1
+                                  sum_rr += rr
+                             else:
+                                  losses += 1
+                                  self.brain.reflect_on_failure(trade, outcome)
+                                  time.sleep(2)
+
+            total_trades = wins + losses
+            win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
+            avg_rr = (sum_rr / wins) if wins > 0 else 0
+
+            days = (self.end_dt - self.start_dt).days
+            monthly_trades = (total_trades / days * 30) if days > 0 else 0
+
+            new_state = {
+                 "total_trades": total_trades,
+                 "wins": wins,
+                 "losses": losses,
+                 "win_rate": win_rate,
+                 "avg_rr": avg_rr,
+                 "monthly_trades": monthly_trades,
+                 "history": state.get('history', []) + [{"run": run+1, "win_rate": win_rate, "total": total_trades}]
             }
-            local_ob = {
-                'OB': exec_features['ob']['OB'].iloc[i-lookback:i].to_dict(),
-                'Top': exec_features['ob']['Top'].iloc[i-lookback:i].to_dict(),
-                'Bottom': exec_features['ob']['Bottom'].iloc[i-lookback:i].to_dict(),
-                'MitigatedIndex': exec_features['ob']['MitigatedIndex'].iloc[i-lookback:i].to_dict()
-            }
-            local_liq = {
-                'Liquidity': exec_features['liquidity']['Liquidity'].iloc[i-lookback:i].to_dict(),
-                'Level': exec_features['liquidity']['Level'].iloc[i-lookback:i].to_dict(),
-                'Swept': exec_features['liquidity']['Swept'].iloc[i-lookback:i].to_dict()
-            }
-            
-            # HTF Features
-            lookback_htf = 10
-            # Find the closest 1h candle to current_time
-            bias_row = df_bias[df_bias['timestamp'] <= current_time].iloc[-1:]
-            if not bias_row.empty:
-                htf_idx = bias_row.index[0]
-                local_fvg_htf = {
-                    'FVG': bias_features['fvg']['FVG'].iloc[htf_idx-lookback_htf:htf_idx].to_dict(),
-                    'Top': bias_features['fvg']['Top'].iloc[htf_idx-lookback_htf:htf_idx].to_dict(),
-                    'Bottom': bias_features['fvg']['Bottom'].iloc[htf_idx-lookback_htf:htf_idx].to_dict()
-                }
-            else:
-                local_fvg_htf = {}
+            self._save_state(new_state)
 
-            market_summary = {
-                "price": current_candle['close'],
-                "bias": bias,
-                "killzone": self.ict.is_killzone(current_time),
-                "features": {
-                    "fvg": local_fvg, 
-                    "ob": local_ob, 
-                    "liquidity": local_liq,
-                    "htf_fvg": local_fvg_htf
-                }
-            }
-            
-            setup_json = self.brain.generate_hypothesis(json.dumps(market_summary))
-            setup = json.loads(setup_json)
-            
-            if setup.get('side') in ['Long', 'Short']:
-                if setup['side'] == bias or bias == "Neutral":
-                    self.enter_trade(setup, current_candle)
+            if win_rate >= 85 and monthly_trades >= 40:
+                 print("Goals met! Autonomous Backtesting complete.")
+                 break
 
-        self.final_report()
-
-    def enter_trade(self, setup, candle):
-        try:
-            rr = (setup['take_profit'] - setup['entry_price']) / (setup['entry_price'] - setup['stop_loss'])
-            if abs(rr) < 2: return
-        except: return
-
-        risk = self.balance * 0.01 # 1% risk
-        stop_dist = abs(setup['entry_price'] - setup['stop_loss'])
-        if stop_dist == 0: return
-        pos_size = risk / stop_dist
-        
-        self.current_trade = {
-            "symbol": self.symbol,
-            "timeframe": self.execution_tf,
-            "side": setup['side'],
-            "entry_price": setup['entry_price'],
-            "stop_loss": setup['stop_loss'],
-            "take_profit": setup['take_profit'],
-            "position_size": pos_size,
-            "timestamp": str(candle['timestamp']),
-            "setup_details": setup,
-            "id": None
-        }
-        self.current_trade['id'] = self.memory.log_trade(self.current_trade)
-
-    def manage_trade(self, candle):
-        t = self.current_trade
-        is_long = t['side'] == 'Long'
-        hit_sl = False
-        hit_tp = False
-        
-        if is_long:
-            if candle['low'] <= t['stop_loss']: hit_sl = True
-            elif candle['high'] >= t['take_profit']: hit_tp = True
-        else:
-            if candle['high'] >= t['stop_loss']: hit_sl = True
-            elif candle['low'] <= t['take_profit']: hit_tp = True
-
-        if hit_sl or hit_tp:
-            result = 'success' if hit_tp else 'failure'
-            pnl = abs(t['take_profit'] - t['entry_price']) * t['position_size'] if hit_tp else -abs(t['entry_price'] - t['stop_loss']) * t['position_size']
-            self.balance += pnl
-            self.trades_history.append({"result": result, "pnl": pnl, "timestamp": candle['timestamp']})
-            self.memory.update_trade_result(t['id'], result, pnl, "")
-            self.current_trade = None
-
-    def final_report(self):
-        print(f"\nReport for {self.symbol}:")
-        print(f"Final Balance: ${self.balance:.2f}")
-        total = len(self.trades_history)
-        wins = len([t for t in self.trades_history if t['result'] == 'success'])
-        win_rate = (wins/total) if total > 0 else 0
-        
-        report = {
-            "symbol": self.symbol,
-            "tf": self.execution_tf,
-            "total_trades": total,
-            "win_rate": win_rate,
-            "balance": self.balance
-        }
-        
-        # ACEO STATE UPDATE
-        state_path = 'e:/TRADING/agency_state.json'
-        with open(state_path, 'r') as f:
-            state = json.load(f)
-        
-        state['assets_processed'].append(report)
-        state['current_metrics']['total_trades'] += total
-        # Recalculate global win rate
-        all_wins = sum(a['win_rate'] * a['total_trades'] for a in state['assets_processed'])
-        all_trades = sum(a['total_trades'] for a in state['assets_processed'])
-        state['current_metrics']['overall_win_rate'] = all_wins / all_trades if all_trades > 0 else 0
-        state['last_checkpoint'] = datetime.utcnow().isoformat()
-        
-        with open(state_path, 'w') as f:
-            json.dump(state, f, indent=4)
-
-        if total > 0:
-            print(f"Trades: {total} | Win Rate: {win_rate*100:.2f}%")
-        else:
-            print("No trades executed.")
+            print(f"Run complete. Win Rate: {win_rate}%. Awaiting next run for improvements...")
+            time.sleep(10)
 
 if __name__ == "__main__":
-    state_path = 'e:/TRADING/agency_state.json'
-    with open('e:/TRADING/top_20_assets.json', 'r') as f:
-        config = json.load(f)
+    from datetime import datetime, timedelta, timezone
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(days=365)
     
-    timeframes = ['5m', '15m', '30m']
-    for s in config['assets']:
-        for tf in timeframes:
-            # Check if already processed
-            with open(state_path, 'r') as f:
-                state = json.load(f)
-            if any(a['symbol'] == s and a['tf'] == tf for a in state['assets_processed']):
-                continue
-                
-            print(f"\n--- ACEO Executing {s} on {tf} ---")
-            tester = Backtester(s, execution_tf=tf)
-            tester.run()
+    bt = Backtester(start.isoformat(), end.isoformat())
+    bt.run_backtest()

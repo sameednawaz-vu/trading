@@ -1,58 +1,86 @@
 import json
 import pandas as pd
 import numpy as np
-import hashlib
-import subprocess
+import requests
 import os
+from dotenv import load_dotenv
+import sqlite3
+
+load_dotenv()
 
 class TradingBrain:
     def __init__(self, api_key=None):
-        self.learnings_path = r'E:\TRADING\learnings.txt'
-        # Use JULES_API_KEY_ACCOUNT_2 from .env if available
-        self.api_key = api_key or os.getenv("JULES_API_KEY_ACCOUNT_2")
+        self.learnings_path = './learnings.txt'
+        self.db_path = './logs/trading_memory.db'
+        self.api_key = api_key or os.getenv("NVIDIA_NIM_API_KEY")
 
-    def _call_gemini_cli(self, prompt):
+        if not os.path.exists('./logs'):
+            os.makedirs('./logs')
+
+        self._init_db()
+
+    def _init_db(self):
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS trades
+                     (id TEXT PRIMARY KEY, side TEXT, entry REAL, sl REAL, tp REAL,
+                      outcome TEXT, model TEXT, reason TEXT, timestamp TEXT)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS reflections
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT, trade_id TEXT, analysis TEXT, timestamp TEXT)''')
+        conn.commit()
+        conn.close()
+
+    def _call_llm(self, prompt):
+        if not self.api_key:
+            print("NVIDIA_NIM_API_KEY not found.")
+            return None
+            
         try:
-            env = os.environ.copy()
-            if self.api_key:
-                env["JULES_API_KEY"] = self.api_key
+            url = "https://integrate.api.nvidia.com/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": "meta/llama-3.3-70b-instruct",
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.2,
+                "max_tokens": 1024,
+            }
+            response = requests.post(url, headers=headers, json=data, timeout=30)
+            response.raise_for_status()
+            result = response.json()
+            content = result['choices'][0]['message']['content']
             
-            escaped_prompt = prompt.replace('"', '`"').replace('$', '`$')
-            cmd = f'echo "{escaped_prompt}" | gemini -p - -o json'
-            
-            result = subprocess.run(
-                ['powershell.exe', '-NoProfile', '-Command', cmd],
-                capture_output=True, text=True, env=env, timeout=120
-            )
-            if result.returncode == 0:
-                full_json = json.loads(result.stdout.strip())
-                content = full_json.get('response', '')
-                start = content.find('{')
-                end = content.rfind('}')
-                if start != -1 and end != -1:
-                    return content[start:end+1]
-                return content
-            else:
-                with open(r'E:\TRADING\logs\cli_errors.log', 'a') as f:
-                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {result.returncode}\nError: {result.stderr}\n")
+            # Extract JSON block if surrounded by markdown
+            start = content.find('{')
+            end = content.rfind('}')
+            if start != -1 and end != -1:
+                return content[start:end+1]
+            return content
         except Exception as e:
-            print(f"CLI Error: {e}")
+            print(f"LLM API Error: {e}")
+            with open('./logs/api_errors.log', 'a') as f:
+                f.write(f"\n--- {pd.Timestamp.now(tz='UTC')} ---\nError: {e}\n")
         return None
+
+    def query(self, prompt):
+        return self._call_llm(prompt)
 
     def generate_hypothesis(self, market_data, context=""):
         try:
             data = json.loads(market_data) if isinstance(market_data, str) else market_data
             
-            # --- STAGE 1: INSTITUTIONAL FILTER v18.0 (Local) ---
-            # Mimicking Jules High-Win setups: Must have Killzone + HTF POI + Sweep
+            # STAGE 1: INSTITUTIONAL FILTER (Local) - pre-filters to save API calls
             hypothesis_json = self._institutional_filter_v18(data)
             hypothesis = json.loads(hypothesis_json)
             
             if hypothesis.get('side') == 'None':
                 return hypothesis_json
 
-            # --- STAGE 2: NEURAL BRAIN (Remote) ---
-            # Fresh analysis, no cache, grounded in 'Evolved Student' research
+            # STAGE 2: NEURAL BRAIN (Remote)
             data_str = json.dumps(data, sort_keys=True)
             learnings = ""
             if os.path.exists(self.learnings_path):
@@ -81,9 +109,9 @@ Review this trade hypothesis triggered by our local Institutional Filter.
 - **CSO**: Technical audit of IDM sweep and BOS.
 - **Eng**: Precision execution on FVG Consequent Encroachment.
 
-FINAL DECISION (JSON):
+FINAL DECISION MUST BE A VALID JSON OBJECT ONLY:
 {{
-  "side": "Long" | "Short" | "None",
+  "side": "Long", "Short" or "None",
   "entry_price": float,
   "stop_loss": float,
   "take_profit": float,
@@ -92,7 +120,7 @@ FINAL DECISION (JSON):
   "confidence": float
 }}
 """
-            response = self._call_gemini_cli(prompt)
+            response = self._call_llm(prompt)
             if response:
                 try:
                     res_json = json.loads(response)
@@ -102,7 +130,7 @@ FINAL DECISION (JSON):
                 except:
                     pass
 
-            return hypothesis_json # Fallback to high-prob local setup
+            return hypothesis_json
 
         except Exception as e:
             print(f"Brain Error: {e}")
@@ -113,7 +141,7 @@ FINAL DECISION (JSON):
             price = data['price']
             bias = data.get('bias', 'Neutral')
             kz = data.get('killzone')
-            features = data['features']
+            features = data.get('features', {})
             
             # 1. Killzone Window (Silver Bullet Windows)
             if kz not in ['London', 'New York']:
@@ -122,15 +150,45 @@ FINAL DECISION (JSON):
             # 2. HTF POI (1h FVG)
             htf_fvg = features.get('htf_fvg', {})
             in_poi = False
-            for idx, val in htf_fvg.get('FVG', {}).items():
-                if htf_fvg['Bottom'][idx] * 0.9995 <= price <= htf_fvg['Top'][idx] * 1.0005:
-                    in_poi = True; break
+
+            fvg_data_htf = htf_fvg.get('FVG', {})
+            top_htf = htf_fvg.get('Top', {})
+            bottom_htf = htf_fvg.get('Bottom', {})
+
+            if isinstance(fvg_data_htf, dict):
+                 for idx, val in fvg_data_htf.items():
+                    # val == 1 means Bullish FVG, val == -1 means Bearish FVG, check proximity
+                    top_val = top_htf.get(idx)
+                    bottom_val = bottom_htf.get(idx)
+                    if top_val and bottom_val and not pd.isna(top_val) and not pd.isna(bottom_val):
+                        if bottom_val * 0.9995 <= price <= top_val * 1.0005:
+                            in_poi = True; break
+            elif isinstance(fvg_data_htf, list):
+                 # Array format
+                 for i, val in enumerate(fvg_data_htf):
+                    if pd.isna(val) or val == 0: continue
+                    top_val = top_htf[i] if i < len(top_htf) else None
+                    bottom_val = bottom_htf[i] if i < len(bottom_htf) else None
+                    if top_val and bottom_val and not pd.isna(top_val) and not pd.isna(bottom_val):
+                         if bottom_val * 0.9995 <= price <= top_val * 1.0005:
+                            in_poi = True; break
+
             if not in_poi: return json.dumps({"side": "None", "reason": "No HTF POI Confluence"})
 
             # 3. Liquidity Sweep
             fvg_data = features.get('fvg', {})
-            recent_lows = [v for v in fvg_data.get('Bottom', {}).values() if not pd.isna(v)]
-            recent_highs = [v for v in fvg_data.get('Top', {}).values() if not pd.isna(v)]
+            bottom_ltf = fvg_data.get('Bottom', {})
+            top_ltf = fvg_data.get('Top', {})
+
+            recent_lows = []
+            recent_highs = []
+            if isinstance(bottom_ltf, dict):
+                 recent_lows = [v for v in bottom_ltf.values() if not pd.isna(v)]
+                 recent_highs = [v for v in top_ltf.values() if not pd.isna(v)]
+            elif isinstance(bottom_ltf, list):
+                 recent_lows = [v for v in bottom_ltf if not pd.isna(v)]
+                 recent_highs = [v for v in top_ltf if not pd.isna(v)]
+
             last_low = min(recent_lows[-5:]) if recent_lows else None
             last_high = max(recent_highs[-5:]) if recent_highs else None
             
@@ -139,7 +197,7 @@ FINAL DECISION (JSON):
 
             if bull_sweep and bias != 'Bearish':
                 sl = last_low * 0.997
-                tp = price + (price - sl) * 3.0 # Target 1:3 RR for 80% precision
+                tp = price + (price - sl) * 3.0 # Target 1:3 RR
                 return json.dumps({"side": "Long", "entry_price": price, "stop_loss": sl, "take_profit": tp, "model_used": "Model 1", "reason": "Institutional POI + Sweep Detected"})
             
             if bear_sweep and bias != 'Bullish':
@@ -147,13 +205,40 @@ FINAL DECISION (JSON):
                 tp = price - (sl - price) * 3.0
                 return json.dumps({"side": "Short", "entry_price": price, "stop_loss": sl, "take_profit": tp, "model_used": "Model 1", "reason": "Institutional POI + Sweep Detected"})
 
-        except: pass
+        except Exception as e:
+            pass
         return json.dumps({"side": "None", "reason": "Insufficient Institutional Confluence"})
 
+    def log_trade(self, trade_id, side, entry, sl, tp, outcome, model, reason):
+        try:
+             conn = sqlite3.connect(self.db_path)
+             c = conn.cursor()
+             c.execute('''INSERT INTO trades (id, side, entry, sl, tp, outcome, model, reason, timestamp)
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                       (trade_id, side, entry, sl, tp, outcome, model, reason, str(pd.Timestamp.now(tz='UTC'))))
+             conn.commit()
+             conn.close()
+        except Exception as e:
+             print(f"Failed to log trade: {e}")
+
     def reflect_on_failure(self, trade_details, outcome):
-        prompt = f"Analyze failed ICT trade: {json.dumps(trade_details)}. Outcome: {outcome}. Provide a concise 'Corrected Mandate' to prevent this."
-        corrected = self._call_gemini_cli(prompt)
+        prompt = f"Analyze failed ICT trade: {json.dumps(trade_details)}. Outcome: {outcome}. Provide a concise 'Corrected Mandate' to prevent this in JSON format with key 'mandate'."
+        corrected = self._call_llm(prompt)
         if corrected:
-            with open(self.learnings_path, 'a') as f:
-                f.write(f"\n--- Post-Mortem ({pd.Timestamp.now()}) ---\n{corrected.strip()}\n")
-        return f"Logged: {trade_details.get('id', 'unknown')}"
+            try:
+                res_json = json.loads(corrected)
+                mandate = res_json.get('mandate', corrected)
+                with open(self.learnings_path, 'a') as f:
+                    f.write(f"\n--- Post-Mortem ({pd.Timestamp.now(tz='UTC')}) ---\n{mandate}\n")
+
+                trade_id = trade_details.get('id', 'unknown')
+                conn = sqlite3.connect(self.db_path)
+                c = conn.cursor()
+                c.execute('''INSERT INTO reflections (trade_id, analysis, timestamp)
+                             VALUES (?, ?, ?)''',
+                          (trade_id, str(mandate), str(pd.Timestamp.now(tz='UTC'))))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                pass
+        return f"Logged failure reflection: {trade_details.get('id', 'unknown')}"

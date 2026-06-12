@@ -11,22 +11,23 @@ class ICTEngine:
         Expects columns: open, high, low, close, volume.
         """
         # Ensure column names are lowercase
-        df.columns = [col.lower() for col in df.columns]
+        _df = df.copy()
+        _df.columns = [col.lower() if isinstance(col, str) else col for col in _df.columns]
         
         # Fair Value Gaps
-        fvg = smc.fvg(df)
+        fvg = smc.fvg(_df.copy())
         
         # Swing Highs/Lows
-        swing_hl = smc.swing_highs_lows(df, swing_length=50)
+        swing_hl = smc.swing_highs_lows(_df.copy(), swing_length=50)
         
         # Order Blocks
-        ob = smc.ob(df, swing_hl)
+        ob = smc.ob(_df.copy(), swing_hl.copy())
         
         # BOS and CHoCH
-        bos_choch = smc.bos_choch(df, swing_hl)
+        bos_choch = smc.bos_choch(_df.copy(), swing_hl.copy())
         
         # Liquidity
-        liquidity = smc.liquidity(df, swing_hl)
+        liquidity = smc.liquidity(_df.copy(), swing_hl.copy())
         
         return {
             'fvg': fvg,
@@ -41,8 +42,11 @@ class ICTEngine:
         Determines the directional bias (Bullish/Bearish/Neutral) 
         based on recent Market Structure (BOS/CHoCH).
         """
-        swing_hl = smc.swing_highs_lows(df, swing_length=20)
-        bos_choch = smc.bos_choch(df, swing_hl)
+        _df = df.copy()
+        _df.columns = [col.lower() if isinstance(col, str) else col for col in _df.columns]
+
+        swing_hl = smc.swing_highs_lows(_df.copy(), swing_length=20)
+        bos_choch = smc.bos_choch(_df.copy(), swing_hl.copy())
         
         last_signals = bos_choch.tail(5)
         
