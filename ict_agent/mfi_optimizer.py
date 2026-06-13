@@ -41,7 +41,7 @@ def test_mfi_reversion(df_dict, symbol, target_rr):
 def run_optimizer():
     print("🚀 ACEO Phase 1: Deep Edge Optimization (MFI Reversion) 🚀")
     
-    with open('e:/TRADING/top_20_assets.json', 'r') as f:
+    with open('/app/top_20_assets.json', 'r') as f:
         config = json.load(f)
     assets = config['assets']
     
@@ -111,7 +111,7 @@ def run_optimizer():
                 "profitability": balance - 10000
             })
             
-    with open('e:/TRADING/mfi_optimization_report.json', 'w') as f:
+    with open('/app/mfi_optimization_report.json', 'w') as f:
         json.dump(results_list, f, indent=4)
     print("\nOptimization Report Saved to mfi_optimization_report.json")
 

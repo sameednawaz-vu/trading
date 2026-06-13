@@ -3,15 +3,15 @@ import pandas as pd
 import os
 import time
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from tqdm import tqdm
 
 class DataIngestor:
-    def __init__(self, exchange_id='binance'):
+    def __init__(self, exchange_id='kraken'):
         self.exchange = getattr(ccxt, exchange_id)({
             'enableRateLimit': True,
         })
-        self.data_path = 'E:/TRADING/data'
+        self.data_path = os.path.join(os.path.dirname(__file__), 'data')
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
 
@@ -59,7 +59,21 @@ class DataIngestor:
         # Remove duplicates
         df = df.drop_duplicates(subset=['timestamp']).sort_values('timestamp')
         
-        filename = f"{symbol.replace('/', '_')}_{timeframe}_full.csv"
+        # Resample to 3m if fetching 1m for 3m
+        if timeframe == '1m':
+            df.set_index('timestamp', inplace=True)
+            df = df.resample('3min').agg({
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum'
+            }).dropna().reset_index()
+            timeframe_to_save = '3m'
+        else:
+            timeframe_to_save = timeframe
+
+        filename = f"{symbol.replace('/', '_')}_{timeframe_to_save}_full.csv"
         path = os.path.join(self.data_path, filename)
         df.to_csv(path, index=False)
         print(f"Saved {len(df)} rows to {path}")
@@ -74,16 +88,16 @@ class DataIngestor:
 
 if __name__ == "__main__":
     ingestor = DataIngestor()
-    # Fetching 1 year of data: April 2025 back to April 2024
-    start = "2025-04-01T00:00:00Z"
-    end = "2026-04-25T00:00:00Z"
+    # Fetching 1 year of data
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(days=365)
 
-    with open('E:/TRADING/top_20_assets.json', 'r') as f:
-        config = json.load(f)
+    start_str = start.strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_str = end.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    symbols = config['assets']
-    timeframes = ['1h', '30m', '15m', '5m']
+    symbols = ["BTC/USD", "ETH/USD", "SOL/USD", "BNB/USD", "XRP/USD", "ADA/USD", "DOGE/USD", "DOT/USD", "AVAX/USD", "ATOM/USD"]
+    timeframes = ['1h', '30m', '15m', '5m', '1m'] # 1m gets resampled to 3m
 
     for symbol in symbols:
         for tf in timeframes:
-            ingestor.fetch_historical_data(symbol, tf, start, end)
+            ingestor.fetch_historical_data(symbol, tf, start_str, end_str)
