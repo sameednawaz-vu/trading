@@ -2,8 +2,8 @@ import json
 import os
 
 def generate_report():
-    leaderboard_path = 'e:/TRADING/strategy_leaderboard.json'
-    report_path = 'e:/TRADING/STRATEGY_REPORT.md'
+    leaderboard_path = '/app/strategy_leaderboard.json'
+    report_path = '/app/STRATEGY_REPORT.md'
     
     if not os.path.exists(leaderboard_path):
         print("Leaderboard not found yet.")
