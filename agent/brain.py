@@ -2,41 +2,48 @@ import json
 import pandas as pd
 import numpy as np
 import hashlib
-import subprocess
 import os
+import requests
 
 class TradingBrain:
     def __init__(self, api_key=None):
-        self.learnings_path = r'E:\TRADING\learnings.txt'
+        self.learnings_path = r'./learnings.txt'
         # Use JULES_API_KEY_ACCOUNT_2 from .env if available
-        self.api_key = api_key or os.getenv("JULES_API_KEY_ACCOUNT_2")
+        self.api_key = api_key or os.getenv("JULES_API_KEY_ACCOUNT_2", "")
 
-    def _call_gemini_cli(self, prompt):
+    def _call_llm(self, prompt):
+        url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": "meta/llama-3.3-70b-instruct",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "top_p": 0.7,
+            "max_tokens": 1024,
+            "stream": False
+        }
+
         try:
-            env = os.environ.copy()
-            if self.api_key:
-                env["JULES_API_KEY"] = self.api_key
-            
-            escaped_prompt = prompt.replace('"', '`"').replace('$', '`$')
-            cmd = f'echo "{escaped_prompt}" | gemini -p - -o json'
-            
-            result = subprocess.run(
-                ['powershell.exe', '-NoProfile', '-Command', cmd],
-                capture_output=True, text=True, env=env, timeout=120
-            )
-            if result.returncode == 0:
-                full_json = json.loads(result.stdout.strip())
-                content = full_json.get('response', '')
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            if response.status_code == 200:
+                resp_json = response.json()
+                content = resp_json['choices'][0]['message']['content']
+
+                # Try to extract JSON from response
                 start = content.find('{')
                 end = content.rfind('}')
                 if start != -1 and end != -1:
                     return content[start:end+1]
                 return content
             else:
-                with open(r'E:\TRADING\logs\cli_errors.log', 'a') as f:
-                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {result.returncode}\nError: {result.stderr}\n")
+                with open('./logs/api_errors.log', 'a') as f:
+                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {response.status_code}\nError: {response.text}\n")
         except Exception as e:
-            print(f"CLI Error: {e}")
+            print(f"LLM API Error: {e}")
         return None
 
     def generate_hypothesis(self, market_data, context=""):
@@ -92,7 +99,7 @@ FINAL DECISION (JSON):
   "confidence": float
 }}
 """
-            response = self._call_gemini_cli(prompt)
+            response = self._call_llm(prompt)
             if response:
                 try:
                     res_json = json.loads(response)
@@ -123,7 +130,7 @@ FINAL DECISION (JSON):
             htf_fvg = features.get('htf_fvg', {})
             in_poi = False
             for idx, val in htf_fvg.get('FVG', {}).items():
-                if htf_fvg['Bottom'][idx] * 0.9995 <= price <= htf_fvg['Top'][idx] * 1.0005:
+                if htf_fvg['Bottom'][str(idx)] * 0.9995 <= price <= htf_fvg['Top'][str(idx)] * 1.0005:
                     in_poi = True; break
             if not in_poi: return json.dumps({"side": "None", "reason": "No HTF POI Confluence"})
 
@@ -152,7 +159,7 @@ FINAL DECISION (JSON):
 
     def reflect_on_failure(self, trade_details, outcome):
         prompt = f"Analyze failed ICT trade: {json.dumps(trade_details)}. Outcome: {outcome}. Provide a concise 'Corrected Mandate' to prevent this."
-        corrected = self._call_gemini_cli(prompt)
+        corrected = self._call_llm(prompt)
         if corrected:
             with open(self.learnings_path, 'a') as f:
                 f.write(f"\n--- Post-Mortem ({pd.Timestamp.now()}) ---\n{corrected.strip()}\n")
