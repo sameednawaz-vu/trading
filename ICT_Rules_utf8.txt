@@ -1,0 +1,18 @@
+﻿The ICT Silver Bullet is a time-based trading strategy developed by Michael J. Huddleston (Inner Circle Trader). It focuses on high-probability "algorithmic" price delivery that occurs during specific one-hour windows when institutional activity is highest.
+
+1. The Silver Bullet Time Windows (EST):
+- London Open: 3:00 AM – 4:00 AM
+- New York AM: 10:00 AM – 11:00 AM
+- New York PM: 2:00 PM – 3:00 PM
+
+2. Core Setup Rules:
+- Identify HTF Bias: Determine the overall market direction using Higher Time Frames (H4 or Daily). You only trade in the direction of this bias.
+- Wait for the Window: Do nothing until the clock hits the start of one of the three windows above.
+- Liquidity Sweep: Price must "raid" or sweep a short-term liquidity level (a previous high or low).
+- Displacement & FVG: Look for a sharp, energetic move in the opposite direction of the sweep that creates a Fair Value Gap (FVG) on a lower timeframe (1m, 3m, or 5m).
+- Market Structure Shift (MSS): Ideally, the displacement move also breaks a recent swing high/low, confirming a shift in structure.
+
+3. Entry and Exit Criteria:
+- Entry: Place a limit order at the beginning (or 50% "consequent encroachment") of the Fair Value Gap. The entry must occur within the one-hour window.
+- Stop Loss: Place your stop loss above/below the candle that swept the liquidity or the high/low of the FVG formation.
+- Take Profit: Target the next logical pool of liquidity (the "Draw on Liquidity"). Aim for a minimum of 1:2 Risk/Reward.
