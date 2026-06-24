@@ -10,23 +10,29 @@ class ICTEngine:
         Computes SMC features using the smartmoneyconcepts library.
         Expects columns: open, high, low, close, volume.
         """
-        # Ensure column names are lowercase
-        df.columns = [col.lower() for col in df.columns]
+        # Pass a copy to prevent downstream modifications
+        df_smc = df.copy()
+
+        # Ensure core columns are lowercase
+        rename_map = {col: col.lower() for col in df_smc.columns if col.lower() in ['open', 'high', 'low', 'close', 'volume', 'timestamp']}
+        df_smc.rename(columns=rename_map, inplace=True)
+
+        # Some SMC functions might expect an index or specific column order, but lowercase 'open', 'high', 'low', 'close', 'volume' is key.
         
         # Fair Value Gaps
-        fvg = smc.fvg(df)
+        fvg = smc.fvg(df_smc)
         
         # Swing Highs/Lows
-        swing_hl = smc.swing_highs_lows(df, swing_length=50)
+        swing_hl = smc.swing_highs_lows(df_smc, swing_length=50)
         
         # Order Blocks
-        ob = smc.ob(df, swing_hl)
+        ob = smc.ob(df_smc, swing_hl)
         
         # BOS and CHoCH
-        bos_choch = smc.bos_choch(df, swing_hl)
+        bos_choch = smc.bos_choch(df_smc, swing_hl)
         
         # Liquidity
-        liquidity = smc.liquidity(df, swing_hl)
+        liquidity = smc.liquidity(df_smc, swing_hl)
         
         return {
             'fvg': fvg,
@@ -41,8 +47,12 @@ class ICTEngine:
         Determines the directional bias (Bullish/Bearish/Neutral) 
         based on recent Market Structure (BOS/CHoCH).
         """
-        swing_hl = smc.swing_highs_lows(df, swing_length=20)
-        bos_choch = smc.bos_choch(df, swing_hl)
+        df_smc = df.copy()
+        rename_map = {col: col.lower() for col in df_smc.columns if col.lower() in ['open', 'high', 'low', 'close', 'volume', 'timestamp']}
+        df_smc.rename(columns=rename_map, inplace=True)
+
+        swing_hl = smc.swing_highs_lows(df_smc, swing_length=20)
+        bos_choch = smc.bos_choch(df_smc, swing_hl)
         
         last_signals = bos_choch.tail(5)
         
