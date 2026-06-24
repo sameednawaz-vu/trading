@@ -1,42 +1,64 @@
 import json
 import pandas as pd
 import numpy as np
-import hashlib
-import subprocess
 import os
+import requests
+import time
+from datetime import datetime, timezone
 
 class TradingBrain:
     def __init__(self, api_key=None):
-        self.learnings_path = r'E:\TRADING\learnings.txt'
-        # Use JULES_API_KEY_ACCOUNT_2 from .env if available
+        self.learnings_path = './logs/learnings.txt'
+        os.makedirs(os.path.dirname(self.learnings_path), exist_ok=True)
         self.api_key = api_key or os.getenv("JULES_API_KEY_ACCOUNT_2")
+        self.nim_url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        self.last_call_time = 0
+        self.rpm_limit = 40
+        self.min_interval = 60.0 / self.rpm_limit
 
-    def _call_gemini_cli(self, prompt):
+    def _rate_limit(self):
+        elapsed = time.time() - self.last_call_time
+        if elapsed < self.min_interval:
+            time.sleep(self.min_interval - elapsed)
+        self.last_call_time = time.time()
+
+    def _call_llm(self, prompt):
+        if not self.api_key:
+            print("Error: Nvidia NIM API key not found.")
+            return None
+            
+        self._rate_limit()
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": "meta/llama-3.3-70b-instruct",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "top_p": 0.7,
+            "max_tokens": 1024,
+            "stream": False
+        }
+
         try:
-            env = os.environ.copy()
-            if self.api_key:
-                env["JULES_API_KEY"] = self.api_key
-            
-            escaped_prompt = prompt.replace('"', '`"').replace('$', '`$')
-            cmd = f'echo "{escaped_prompt}" | gemini -p - -o json'
-            
-            result = subprocess.run(
-                ['powershell.exe', '-NoProfile', '-Command', cmd],
-                capture_output=True, text=True, env=env, timeout=120
-            )
-            if result.returncode == 0:
-                full_json = json.loads(result.stdout.strip())
-                content = full_json.get('response', '')
+            response = requests.post(self.nim_url, headers=headers, json=payload, timeout=60)
+            if response.status_code == 200:
+                content = response.json()['choices'][0]['message']['content']
+                # Extract JSON from potential markdown blocks
                 start = content.find('{')
                 end = content.rfind('}')
                 if start != -1 and end != -1:
                     return content[start:end+1]
                 return content
             else:
-                with open(r'E:\TRADING\logs\cli_errors.log', 'a') as f:
-                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {result.returncode}\nError: {result.stderr}\n")
+                with open('./logs/llm_errors.log', 'a') as f:
+                    f.write(f"\n--- {datetime.now(timezone.utc).isoformat()} ---\nStatus: {response.status_code}\nError: {response.text}\n")
+                print(f"LLM API Error: {response.status_code}")
         except Exception as e:
-            print(f"CLI Error: {e}")
+            print(f"Network/LLM Error: {e}")
         return None
 
     def generate_hypothesis(self, market_data, context=""):
@@ -44,7 +66,6 @@ class TradingBrain:
             data = json.loads(market_data) if isinstance(market_data, str) else market_data
             
             # --- STAGE 1: INSTITUTIONAL FILTER v18.0 (Local) ---
-            # Mimicking Jules High-Win setups: Must have Killzone + HTF POI + Sweep
             hypothesis_json = self._institutional_filter_v18(data)
             hypothesis = json.loads(hypothesis_json)
             
@@ -52,7 +73,6 @@ class TradingBrain:
                 return hypothesis_json
 
             # --- STAGE 2: NEURAL BRAIN (Remote) ---
-            # Fresh analysis, no cache, grounded in 'Evolved Student' research
             data_str = json.dumps(data, sort_keys=True)
             learnings = ""
             if os.path.exists(self.learnings_path):
@@ -81,7 +101,7 @@ Review this trade hypothesis triggered by our local Institutional Filter.
 - **CSO**: Technical audit of IDM sweep and BOS.
 - **Eng**: Precision execution on FVG Consequent Encroachment.
 
-FINAL DECISION (JSON):
+FINAL DECISION (JSON ONLY - NO MARKDOWN, JUST THE JSON OBJECT):
 {{
   "side": "Long" | "Short" | "None",
   "entry_price": float,
@@ -92,7 +112,7 @@ FINAL DECISION (JSON):
   "confidence": float
 }}
 """
-            response = self._call_gemini_cli(prompt)
+            response = self._call_llm(prompt)
             if response:
                 try:
                     res_json = json.loads(response)
@@ -115,7 +135,7 @@ FINAL DECISION (JSON):
             kz = data.get('killzone')
             features = data['features']
             
-            # 1. Killzone Window (Silver Bullet Windows)
+            # 1. Killzone Window
             if kz not in ['London', 'New York']:
                 return json.dumps({"side": "None", "reason": "Outside Institutional Windows"})
 
@@ -123,7 +143,7 @@ FINAL DECISION (JSON):
             htf_fvg = features.get('htf_fvg', {})
             in_poi = False
             for idx, val in htf_fvg.get('FVG', {}).items():
-                if htf_fvg['Bottom'][idx] * 0.9995 <= price <= htf_fvg['Top'][idx] * 1.0005:
+                if htf_fvg.get('Bottom', {}).get(idx, 0) * 0.9995 <= price <= htf_fvg.get('Top', {}).get(idx, float('inf')) * 1.0005:
                     in_poi = True; break
             if not in_poi: return json.dumps({"side": "None", "reason": "No HTF POI Confluence"})
 
@@ -139,7 +159,7 @@ FINAL DECISION (JSON):
 
             if bull_sweep and bias != 'Bearish':
                 sl = last_low * 0.997
-                tp = price + (price - sl) * 3.0 # Target 1:3 RR for 80% precision
+                tp = price + (price - sl) * 3.0 # Target 1:3 RR
                 return json.dumps({"side": "Long", "entry_price": price, "stop_loss": sl, "take_profit": tp, "model_used": "Model 1", "reason": "Institutional POI + Sweep Detected"})
             
             if bear_sweep and bias != 'Bullish':
@@ -152,8 +172,8 @@ FINAL DECISION (JSON):
 
     def reflect_on_failure(self, trade_details, outcome):
         prompt = f"Analyze failed ICT trade: {json.dumps(trade_details)}. Outcome: {outcome}. Provide a concise 'Corrected Mandate' to prevent this."
-        corrected = self._call_gemini_cli(prompt)
+        corrected = self._call_llm(prompt)
         if corrected:
             with open(self.learnings_path, 'a') as f:
-                f.write(f"\n--- Post-Mortem ({pd.Timestamp.now()}) ---\n{corrected.strip()}\n")
+                f.write(f"\n--- Post-Mortem ({datetime.now(timezone.utc).isoformat()}) ---\n{corrected.strip()}\n")
         return f"Logged: {trade_details.get('id', 'unknown')}"
