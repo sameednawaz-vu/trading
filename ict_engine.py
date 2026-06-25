@@ -14,19 +14,19 @@ class ICTEngine:
         df.columns = [col.lower() for col in df.columns]
         
         # Fair Value Gaps
-        fvg = smc.fvg(df)
+        fvg = smc.fvg(df.copy())
         
         # Swing Highs/Lows
-        swing_hl = smc.swing_highs_lows(df, swing_length=50)
+        swing_hl = smc.swing_highs_lows(df.copy(), swing_length=50)
         
         # Order Blocks
-        ob = smc.ob(df, swing_hl)
+        ob = smc.ob(df.copy(), swing_hl)
         
         # BOS and CHoCH
-        bos_choch = smc.bos_choch(df, swing_hl)
+        bos_choch = smc.bos_choch(df.copy(), swing_hl)
         
         # Liquidity
-        liquidity = smc.liquidity(df, swing_hl)
+        liquidity = smc.liquidity(df.copy(), swing_hl)
         
         return {
             'fvg': fvg,
@@ -41,8 +41,8 @@ class ICTEngine:
         Determines the directional bias (Bullish/Bearish/Neutral) 
         based on recent Market Structure (BOS/CHoCH).
         """
-        swing_hl = smc.swing_highs_lows(df, swing_length=20)
-        bos_choch = smc.bos_choch(df, swing_hl)
+        swing_hl = smc.swing_highs_lows(df.copy(), swing_length=20)
+        bos_choch = smc.bos_choch(df.copy(), swing_hl)
         
         last_signals = bos_choch.tail(5)
         

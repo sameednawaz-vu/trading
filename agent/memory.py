@@ -1,10 +1,11 @@
+from datetime import timezone
 import sqlite3
 import json
 import os
 from datetime import datetime
 
 class MemoryManager:
-    def __init__(self, db_path='E:/TRADING/logs/trading_memory.db', mempalace_path='E:/TRADING/mempalace'):
+    def __init__(self, db_path='./logs/trading_memory.db', mempalace_path='./mempalace'):
         self.db_path = db_path
         self.mempalace_path = mempalace_path
         self._init_db()
@@ -54,7 +55,7 @@ class MemoryManager:
             INSERT INTO trades (timestamp, symbol, timeframe, side, entry_price, stop_loss, take_profit, result, pnl, setup_details)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            trade_data.get('timestamp', datetime.utcnow().isoformat()),
+            trade_data.get('timestamp', datetime.now(timezone.utc).isoformat()),
             trade_data['symbol'],
             trade_data['timeframe'],
             trade_data['side'],

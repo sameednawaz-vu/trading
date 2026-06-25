@@ -7,11 +7,11 @@ from datetime import datetime, timedelta
 from tqdm import tqdm
 
 class DataIngestor:
-    def __init__(self, exchange_id='binance'):
+    def __init__(self, exchange_id='kraken'):
         self.exchange = getattr(ccxt, exchange_id)({
             'enableRateLimit': True,
         })
-        self.data_path = 'E:/TRADING/data'
+        self.data_path = './data'
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
 
@@ -63,6 +63,18 @@ class DataIngestor:
         path = os.path.join(self.data_path, filename)
         df.to_csv(path, index=False)
         print(f"Saved {len(df)} rows to {path}")
+
+        # If we just fetched 1m data, we should also resample it to create 3m data
+        if timeframe == '1m':
+            df.set_index('timestamp', inplace=True)
+            df_3m = df.resample('3min').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'})
+            df_3m.dropna(inplace=True)
+            df_3m.reset_index(inplace=True)
+            filename_3m = f"{symbol.replace('/', '_')}_3m_full.csv"
+            path_3m = os.path.join(self.data_path, filename_3m)
+            df_3m.to_csv(path_3m, index=False)
+            print(f"Saved {len(df_3m)} rows to {path_3m} (Resampled from 1m)")
+
         return df
 
     def load_full_data(self, symbol, timeframe):
@@ -78,11 +90,11 @@ if __name__ == "__main__":
     start = "2025-04-01T00:00:00Z"
     end = "2026-04-25T00:00:00Z"
 
-    with open('E:/TRADING/top_20_assets.json', 'r') as f:
+    with open('./top_20_assets.json', 'r') as f:
         config = json.load(f)
 
     symbols = config['assets']
-    timeframes = ['1h', '30m', '15m', '5m']
+    timeframes = ['1h', '30m', '15m', '5m', '1m']
 
     for symbol in symbols:
         for tf in timeframes:

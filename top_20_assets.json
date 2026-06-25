@@ -1,0 +1,26 @@
+{
+  "assets": [
+    "BTC/USD",
+    "ETH/USD",
+    "SOL/USD",
+    "BNB/USD",
+    "XRP/USD",
+    "ADA/USD",
+    "AI16Z/USD",
+    "ALEO/USD",
+    "ALGO/USD",
+    "APE/USD",
+    "ATOM/USD",
+    "AVAX/USD",
+    "BCH/USD",
+    "BERA/USD",
+    "CC/USD",
+    "CRO/USD",
+    "DAI/USD",
+    "DOGE/USD",
+    "DOT/USD",
+    "EURR/USD",
+    "FARTCOIN/USD",
+    "FIDD/USD"
+  ]
+}
