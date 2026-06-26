@@ -1,42 +1,65 @@
 import json
 import pandas as pd
 import numpy as np
-import hashlib
-import subprocess
+import requests
 import os
+import time
 
 class TradingBrain:
     def __init__(self, api_key=None):
-        self.learnings_path = r'E:\TRADING\learnings.txt'
-        # Use JULES_API_KEY_ACCOUNT_2 from .env if available
-        self.api_key = api_key or os.getenv("JULES_API_KEY_ACCOUNT_2")
+        self.learnings_path = './learnings.txt'
+        self.api_key = api_key or os.getenv("JULES_API_KEY_ACCOUNT_2") or os.getenv("NV_API_KEY")
+        self.rpm_limit = 40
+        self.request_times = []
 
-    def _call_gemini_cli(self, prompt):
+    def _wait_for_rate_limit(self):
+        now = time.time()
+        # Keep only requests from the last 60 seconds
+        self.request_times = [t for t in self.request_times if now - t < 60]
+
+        if len(self.request_times) >= self.rpm_limit:
+            oldest_request = self.request_times[0]
+            sleep_time = 60 - (now - oldest_request)
+            if sleep_time > 0:
+                print(f"Rate limit hit. Sleeping for {sleep_time:.2f} seconds...")
+                time.sleep(sleep_time)
+
+        self.request_times.append(time.time())
+
+    def _call_llm(self, prompt):
+        self._wait_for_rate_limit()
+
+        url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": "meta/llama-3.3-70b-instruct",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "top_p": 0.7,
+            "max_tokens": 1024,
+            "stream": False
+        }
+
         try:
-            env = os.environ.copy()
-            if self.api_key:
-                env["JULES_API_KEY"] = self.api_key
-            
-            escaped_prompt = prompt.replace('"', '`"').replace('$', '`$')
-            cmd = f'echo "{escaped_prompt}" | gemini -p - -o json'
-            
-            result = subprocess.run(
-                ['powershell.exe', '-NoProfile', '-Command', cmd],
-                capture_output=True, text=True, env=env, timeout=120
-            )
-            if result.returncode == 0:
-                full_json = json.loads(result.stdout.strip())
-                content = full_json.get('response', '')
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            if response.status_code == 200:
+                res_json = response.json()
+                content = res_json['choices'][0]['message']['content']
+                # Try to extract JSON from response
                 start = content.find('{')
                 end = content.rfind('}')
                 if start != -1 and end != -1:
                     return content[start:end+1]
                 return content
             else:
-                with open(r'E:\TRADING\logs\cli_errors.log', 'a') as f:
-                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {result.returncode}\nError: {result.stderr}\n")
+                with open('./logs/cli_errors.log', 'a') as f:
+                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {response.status_code}\nError: {response.text}\n")
         except Exception as e:
-            print(f"CLI Error: {e}")
+            print(f"LLM API Error: {e}")
         return None
 
     def generate_hypothesis(self, market_data, context=""):
@@ -81,7 +104,7 @@ Review this trade hypothesis triggered by our local Institutional Filter.
 - **CSO**: Technical audit of IDM sweep and BOS.
 - **Eng**: Precision execution on FVG Consequent Encroachment.
 
-FINAL DECISION (JSON):
+FINAL DECISION MUST BE VALID JSON ONLY:
 {{
   "side": "Long" | "Short" | "None",
   "entry_price": float,
@@ -92,7 +115,7 @@ FINAL DECISION (JSON):
   "confidence": float
 }}
 """
-            response = self._call_gemini_cli(prompt)
+            response = self._call_llm(prompt)
             if response:
                 try:
                     res_json = json.loads(response)
@@ -123,7 +146,7 @@ FINAL DECISION (JSON):
             htf_fvg = features.get('htf_fvg', {})
             in_poi = False
             for idx, val in htf_fvg.get('FVG', {}).items():
-                if htf_fvg['Bottom'][idx] * 0.9995 <= price <= htf_fvg['Top'][idx] * 1.0005:
+                if htf_fvg.get('Bottom', {}).get(idx, 0) * 0.9995 <= price <= htf_fvg.get('Top', {}).get(idx, 0) * 1.0005:
                     in_poi = True; break
             if not in_poi: return json.dumps({"side": "None", "reason": "No HTF POI Confluence"})
 
@@ -152,7 +175,7 @@ FINAL DECISION (JSON):
 
     def reflect_on_failure(self, trade_details, outcome):
         prompt = f"Analyze failed ICT trade: {json.dumps(trade_details)}. Outcome: {outcome}. Provide a concise 'Corrected Mandate' to prevent this."
-        corrected = self._call_gemini_cli(prompt)
+        corrected = self._call_llm(prompt)
         if corrected:
             with open(self.learnings_path, 'a') as f:
                 f.write(f"\n--- Post-Mortem ({pd.Timestamp.now()}) ---\n{corrected.strip()}\n")
