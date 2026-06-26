@@ -3,27 +3,26 @@ import pandas as pd
 import os
 import time
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from tqdm import tqdm
 
 class DataIngestor:
-    def __init__(self, exchange_id='binance'):
+    def __init__(self, exchange_id='kraken'):
         self.exchange = getattr(ccxt, exchange_id)({
             'enableRateLimit': True,
         })
-        self.data_path = 'E:/TRADING/data'
+        self.data_path = './data'
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
 
-    def fetch_historical_data(self, symbol, timeframe, start_date_str, end_date_str):
-        """Fetches a full year of historical data in chunks."""
+    def fetch_historical_data(self, symbol, start_date_str, end_date_str):
+        """Fetches a full year of historical data in chunks of 1m."""
+        timeframe = '1m'
         since = self.exchange.parse8601(start_date_str)
         end_timestamp = self.exchange.parse8601(end_date_str)
         
         all_ohlcv = []
         
-        # Calculate total estimated iterations for progress bar
-        # (Approximate, depends on limit per call)
         print(f"Syncing {symbol} {timeframe} from {start_date_str} to {end_date_str}...")
         
         pbar = tqdm(total=end_timestamp - since, unit='ms', desc=f"{symbol} {timeframe}")
@@ -36,13 +35,11 @@ class DataIngestor:
                     break
                 
                 last_timestamp = ohlcv[-1][0]
-                # Update progress
                 pbar.update(last_timestamp - since)
                 since = last_timestamp + 1
                 
                 all_ohlcv.extend(ohlcv)
                 
-                # Avoid rate limit
                 time.sleep(self.exchange.rateLimit / 1000)
                 
                 if len(ohlcv) < limit:
@@ -54,15 +51,38 @@ class DataIngestor:
         
         pbar.close()
         
+        if not all_ohlcv:
+            print(f"No data fetched for {symbol}")
+            return None
+
         df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-        # Remove duplicates
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
         df = df.drop_duplicates(subset=['timestamp']).sort_values('timestamp')
+        df.set_index('timestamp', inplace=True)
         
-        filename = f"{symbol.replace('/', '_')}_{timeframe}_full.csv"
+        # Resample to needed timeframes
+        timeframes = {'3m': '3min', '5m': '5min', '15m': '15min', '30m': '30min', '1h': '1h'}
+        for tf_name, tf_alias in timeframes.items():
+            resampled = df.resample(tf_alias).agg({
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum'
+            }).dropna()
+            resampled = resampled.reset_index()
+
+            filename = f"{symbol.replace('/', '_')}_{tf_name}_full.csv"
+            path = os.path.join(self.data_path, filename)
+            resampled.to_csv(path, index=False)
+            print(f"Saved {len(resampled)} rows to {path}")
+
+        # Save 1m just in case
+        df = df.reset_index()
+        filename = f"{symbol.replace('/', '_')}_1m_full.csv"
         path = os.path.join(self.data_path, filename)
         df.to_csv(path, index=False)
-        print(f"Saved {len(df)} rows to {path}")
+
         return df
 
     def load_full_data(self, symbol, timeframe):
@@ -74,16 +94,19 @@ class DataIngestor:
 
 if __name__ == "__main__":
     ingestor = DataIngestor()
-    # Fetching 1 year of data: April 2025 back to April 2024
-    start = "2025-04-01T00:00:00Z"
-    end = "2026-04-25T00:00:00Z"
+    # Fetching 1 year of data: approx 1 year back from today
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=365)
 
-    with open('E:/TRADING/top_20_assets.json', 'r') as f:
-        config = json.load(f)
+    start = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+    end = end_date.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    symbols = config['assets']
-    timeframes = ['1h', '30m', '15m', '5m']
+    symbols = [
+        "BTC/USD", "ETH/USD", "SOL/USD", "BNB/USD", "XRP/USD",
+        "ADA/USD", "DOGE/USD", "DOT/USD", "AVAX/USD", "LINK/USD",
+        "MATIC/USD", "LTC/USD", "BCH/USD", "ATOM/USD", "UNI/USD",
+        "XLM/USD", "NEAR/USD", "ALGO/USD", "AAVE/USD", "ICP/USD"
+    ]
 
     for symbol in symbols:
-        for tf in timeframes:
-            ingestor.fetch_historical_data(symbol, tf, start, end)
+        ingestor.fetch_historical_data(symbol, start, end)

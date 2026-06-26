@@ -10,23 +10,24 @@ class ICTEngine:
         Computes SMC features using the smartmoneyconcepts library.
         Expects columns: open, high, low, close, volume.
         """
-        # Ensure column names are lowercase
-        df.columns = [col.lower() for col in df.columns]
+        # Ensure column names are lowercase and we pass a copy
+        df_copy = df.copy()
+        df_copy.columns = [col.lower() for col in df_copy.columns]
         
         # Fair Value Gaps
-        fvg = smc.fvg(df)
+        fvg = smc.fvg(df_copy)
         
         # Swing Highs/Lows
-        swing_hl = smc.swing_highs_lows(df, swing_length=50)
+        swing_hl = smc.swing_highs_lows(df_copy, swing_length=50)
         
         # Order Blocks
-        ob = smc.ob(df, swing_hl)
+        ob = smc.ob(df_copy, swing_hl)
         
         # BOS and CHoCH
-        bos_choch = smc.bos_choch(df, swing_hl)
+        bos_choch = smc.bos_choch(df_copy, swing_hl)
         
         # Liquidity
-        liquidity = smc.liquidity(df, swing_hl)
+        liquidity = smc.liquidity(df_copy, swing_hl)
         
         return {
             'fvg': fvg,
@@ -41,8 +42,11 @@ class ICTEngine:
         Determines the directional bias (Bullish/Bearish/Neutral) 
         based on recent Market Structure (BOS/CHoCH).
         """
-        swing_hl = smc.swing_highs_lows(df, swing_length=20)
-        bos_choch = smc.bos_choch(df, swing_hl)
+        df_copy = df.copy()
+        df_copy.columns = [col.lower() for col in df_copy.columns]
+
+        swing_hl = smc.swing_highs_lows(df_copy, swing_length=20)
+        bos_choch = smc.bos_choch(df_copy, swing_hl)
         
         last_signals = bos_choch.tail(5)
         
@@ -60,6 +64,10 @@ class ICTEngine:
         Determines if a given timestamp falls within an ICT Killzone.
         Times in UTC.
         """
+        # Ensure timestamp is UTC if it's localized
+        if timestamp.tzinfo is not None:
+            timestamp = timestamp.astimezone(pd.Timestamp.utcnow().tz)
+
         hour = timestamp.hour
         if 7 <= hour < 10:
             return "London"
