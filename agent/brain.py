@@ -7,36 +7,40 @@ import os
 
 class TradingBrain:
     def __init__(self, api_key=None):
-        self.learnings_path = r'E:\TRADING\learnings.txt'
+        self.learnings_path = r'.\learnings.txt'
         # Use JULES_API_KEY_ACCOUNT_2 from .env if available
         self.api_key = api_key or os.getenv("JULES_API_KEY_ACCOUNT_2")
 
-    def _call_gemini_cli(self, prompt):
+    def _call_nvidia_api(self, prompt):
         try:
-            env = os.environ.copy()
-            if self.api_key:
-                env["JULES_API_KEY"] = self.api_key
-            
-            escaped_prompt = prompt.replace('"', '`"').replace('$', '`$')
-            cmd = f'echo "{escaped_prompt}" | gemini -p - -o json'
-            
-            result = subprocess.run(
-                ['powershell.exe', '-NoProfile', '-Command', cmd],
-                capture_output=True, text=True, env=env, timeout=120
-            )
-            if result.returncode == 0:
-                full_json = json.loads(result.stdout.strip())
-                content = full_json.get('response', '')
+            import requests
+            url = "https://integrate.api.nvidia.com/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": "meta/llama-3.3-70b-instruct",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.2,
+                "top_p": 0.7,
+                "max_tokens": 1024,
+                "stream": False
+            }
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            if response.status_code == 200:
+                full_json = response.json()
+                content = full_json.get('choices', [{}])[0].get('message', {}).get('content', '')
                 start = content.find('{')
                 end = content.rfind('}')
                 if start != -1 and end != -1:
                     return content[start:end+1]
                 return content
             else:
-                with open(r'E:\TRADING\logs\cli_errors.log', 'a') as f:
-                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {result.returncode}\nError: {result.stderr}\n")
+                with open(r'./logs/cli_errors.log', 'a') as f:
+                    f.write(f"\n--- {pd.Timestamp.now()} ---\nCode: {response.status_code}\nError: {response.text}\n")
         except Exception as e:
-            print(f"CLI Error: {e}")
+            print(f"API Error: {e}")
         return None
 
     def generate_hypothesis(self, market_data, context=""):
@@ -92,7 +96,7 @@ FINAL DECISION (JSON):
   "confidence": float
 }}
 """
-            response = self._call_gemini_cli(prompt)
+            response = self._call_nvidia_api(prompt)
             if response:
                 try:
                     res_json = json.loads(response)
@@ -152,7 +156,7 @@ FINAL DECISION (JSON):
 
     def reflect_on_failure(self, trade_details, outcome):
         prompt = f"Analyze failed ICT trade: {json.dumps(trade_details)}. Outcome: {outcome}. Provide a concise 'Corrected Mandate' to prevent this."
-        corrected = self._call_gemini_cli(prompt)
+        corrected = self._call_nvidia_api(prompt)
         if corrected:
             with open(self.learnings_path, 'a') as f:
                 f.write(f"\n--- Post-Mortem ({pd.Timestamp.now()}) ---\n{corrected.strip()}\n")

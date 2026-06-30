@@ -1,10 +1,10 @@
 import sqlite3
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 class MemoryManager:
-    def __init__(self, db_path='E:/TRADING/logs/trading_memory.db', mempalace_path='E:/TRADING/mempalace'):
+    def __init__(self, db_path='./logs/trading_memory.db', mempalace_path='./mempalace'):
         self.db_path = db_path
         self.mempalace_path = mempalace_path
         self._init_db()
@@ -54,7 +54,7 @@ class MemoryManager:
             INSERT INTO trades (timestamp, symbol, timeframe, side, entry_price, stop_loss, take_profit, result, pnl, setup_details)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            trade_data.get('timestamp', datetime.utcnow().isoformat()),
+            trade_data.get('timestamp', datetime.now(timezone.utc).isoformat()),
             trade_data['symbol'],
             trade_data['timeframe'],
             trade_data['side'],
@@ -73,6 +73,27 @@ class MemoryManager:
     def update_trade_result(self, trade_id, result, pnl, reflection=None):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
+
+        # Fetch trade data for mempalace storage
+        cursor.execute('SELECT setup_details, symbol, timeframe, side FROM trades WHERE id = ?', (trade_id,))
+        row = cursor.fetchone()
+        if row:
+            setup_details, symbol, timeframe, side = row
+            try:
+                setup_data = json.loads(setup_details)
+                setup_data['symbol'] = symbol
+                setup_data['timeframe'] = timeframe
+                setup_data['side'] = side
+                setup_data['pnl'] = pnl
+                setup_data['reflection'] = reflection
+
+                # Store in mempalace
+                category = 'successes' if result == 'success' else 'failures'
+                name = f"{symbol.replace('/', '_')}_{timeframe}_{side}_{trade_id}"
+                self.store_pattern(category, name, setup_data)
+            except Exception as e:
+                print(f"Failed to store pattern in mempalace: {e}")
+
         cursor.execute('''
             UPDATE trades SET result = ?, pnl = ?, reflection = ? WHERE id = ?
         ''', (result, pnl, reflection, trade_id))

@@ -14,8 +14,8 @@ class StrategyRankingEngine:
     def __init__(self, assets, timeframes=['1h', '15m', '5m']):
         self.assets = assets
         self.timeframes = timeframes
-        self.state_path = 'e:/TRADING/ranking_state.json'
-        self.leaderboard_path = 'e:/TRADING/strategy_leaderboard.json'
+        self.state_path = './ranking_state.json'
+        self.leaderboard_path = './strategy_leaderboard.json'
         self.load_state()
 
     def load_state(self):

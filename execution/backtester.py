@@ -1,12 +1,12 @@
 import pandas as pd
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import sys
 from tqdm import tqdm
 
 # Add root to path for imports
-sys.path.append('E:/TRADING')
+sys.path.append('.')
 
 from data_ingestion import DataIngestor
 from ict_engine import ICTEngine
@@ -63,7 +63,7 @@ class Backtester:
 
             # Bias (HTF) - Update only every hour for speed
             if i == start_idx or current_time.minute == 0:
-                bias_idx_slice = df_bias[df_bias['timestamp'] <= current_time]
+                bias_idx_slice = df_bias[df_bias['timestamp'] < current_time]
                 if len(bias_idx_slice) >= 50:
                     last_bias_idx = bias_idx_slice.index[-1]
                     bias_window = df_bias.iloc[last_bias_idx-50:last_bias_idx]
@@ -93,7 +93,7 @@ class Backtester:
             # HTF Features
             lookback_htf = 10
             # Find the closest 1h candle to current_time
-            bias_row = df_bias[df_bias['timestamp'] <= current_time].iloc[-1:]
+            bias_row = df_bias[df_bias['timestamp'] < current_time].iloc[-1:]
             if not bias_row.empty:
                 htf_idx = bias_row.index[0]
                 local_fvg_htf = {
@@ -187,7 +187,7 @@ class Backtester:
         }
         
         # ACEO STATE UPDATE
-        state_path = 'e:/TRADING/agency_state.json'
+        state_path = './agency_state.json'
         with open(state_path, 'r') as f:
             state = json.load(f)
         
@@ -197,7 +197,7 @@ class Backtester:
         all_wins = sum(a['win_rate'] * a['total_trades'] for a in state['assets_processed'])
         all_trades = sum(a['total_trades'] for a in state['assets_processed'])
         state['current_metrics']['overall_win_rate'] = all_wins / all_trades if all_trades > 0 else 0
-        state['last_checkpoint'] = datetime.utcnow().isoformat()
+        state['last_checkpoint'] = datetime.now(timezone.utc).isoformat()
         
         with open(state_path, 'w') as f:
             json.dump(state, f, indent=4)
@@ -208,11 +208,11 @@ class Backtester:
             print("No trades executed.")
 
 if __name__ == "__main__":
-    state_path = 'e:/TRADING/agency_state.json'
-    with open('e:/TRADING/top_20_assets.json', 'r') as f:
+    state_path = './agency_state.json'
+    with open('./top_20_assets.json', 'r') as f:
         config = json.load(f)
     
-    timeframes = ['5m', '15m', '30m']
+    timeframes = ['3m', '5m', '15m', '30m', '1h']
     for s in config['assets']:
         for tf in timeframes:
             # Check if already processed

@@ -4,7 +4,7 @@ import os
 import json
 import time
 
-CACHE_DIR = r"E:\TRADING\ict_agent\data_cache"
+CACHE_DIR = r".\ict_agent\data_cache"
 
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
