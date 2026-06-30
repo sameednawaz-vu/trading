@@ -14,7 +14,7 @@ def main():
     init_db()
     
     # 2. Portfolio Configuration
-    with open('e:/TRADING/top_20_assets.json', 'r') as f:
+    with open('./top_20_assets.json', 'r') as f:
         config = json.load(f)
     symbols = config['assets']
     
@@ -30,7 +30,7 @@ def main():
     print(f"Final Balance: ${tester.balance:.2f}")
     
     # Update Agency State
-    state_path = 'e:/TRADING/agency_state.json'
+    state_path = './agency_state.json'
     with open(state_path, 'r') as f:
         state = json.load(f)
     

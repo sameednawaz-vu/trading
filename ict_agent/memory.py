@@ -2,7 +2,7 @@ import sqlite3
 import json
 from datetime import datetime
 
-DB_NAME = r'E:\TRADING\ict_agent\mempalace.db'
+DB_NAME = r'.\ict_agent\mempalace.db'
 
 class MemPalace:
     def __init__(self, db_name=DB_NAME):

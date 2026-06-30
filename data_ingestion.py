@@ -7,11 +7,11 @@ from datetime import datetime, timedelta
 from tqdm import tqdm
 
 class DataIngestor:
-    def __init__(self, exchange_id='binance'):
+    def __init__(self, exchange_id='kraken'):
         self.exchange = getattr(ccxt, exchange_id)({
             'enableRateLimit': True,
         })
-        self.data_path = 'E:/TRADING/data'
+        self.data_path = './data'
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
 
@@ -73,17 +73,40 @@ class DataIngestor:
         return None
 
 if __name__ == "__main__":
-    ingestor = DataIngestor()
-    # Fetching 1 year of data: April 2025 back to April 2024
-    start = "2025-04-01T00:00:00Z"
-    end = "2026-04-25T00:00:00Z"
+    ingestor = DataIngestor(exchange_id='kraken')
+    # Fetching smaller timeframe for testing to save time, adjust dates as needed for full run
+    start = "2023-01-01T00:00:00Z"
+    end = "2024-01-01T00:00:00Z"
 
-    with open('E:/TRADING/top_20_assets.json', 'r') as f:
+    with open('./top_20_assets.json', 'r') as f:
         config = json.load(f)
 
     symbols = config['assets']
-    timeframes = ['1h', '30m', '15m', '5m']
+    timeframes = ['1m']
 
     for symbol in symbols:
         for tf in timeframes:
-            ingestor.fetch_historical_data(symbol, tf, start, end)
+            df_1m = ingestor.fetch_historical_data(symbol, tf, start, end)
+            if df_1m is None or df_1m.empty:
+                print(f"Skipping resampling for {symbol} due to empty data.")
+                continue
+
+            # Resampling logic
+            df_1m.set_index('timestamp', inplace=True)
+
+            resample_dict = {
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum'
+            }
+
+            tfs = {'3m': '3min', '5m': '5min', '15m': '15min', '30m': '30min', '1h': '1h'}
+            for tf_name, tf_freq in tfs.items():
+                df_resampled = df_1m.resample(tf_freq).agg(resample_dict).dropna()
+                df_resampled.reset_index(inplace=True)
+                filename = f"{symbol.replace('/', '_')}_{tf_name}_full.csv"
+                path = os.path.join(ingestor.data_path, filename)
+                df_resampled.to_csv(path, index=False)
+                print(f"Saved {len(df_resampled)} rows to {path}")
