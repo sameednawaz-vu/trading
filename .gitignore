@@ -1,15 +1,40 @@
-__pycache__/
-*.pyc
+# Environments
 .env
-*.db
-*.bak
-ict_agent/data_cache/
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Logs and databases
 logs/
-data/*.csv
-jules_session_*/
-*.jules
-agency_state.json
-ranking_state.json
-strategy_leaderboard.json
-mfi_optimization_report.json
-top_20_assets.json
+*.log
+*.sql
+*.sqlite
+*.db
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cache directories
+data_cache/
+
+# Ignore specific JSONs other than config
+*.json
+!top_20_assets.json
+!agency_state.json
+!ranking_state.json
+!strategy_leaderboard.json
+!skills/mempalace/**/*.json
+
+# IDE
+.idea/
+.vscode/
+
+# Build and temp
+reports/
+mempalace/
+test_kraken.py

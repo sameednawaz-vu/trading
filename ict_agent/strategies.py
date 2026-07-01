@@ -22,7 +22,7 @@ class StrategyFactory:
     # 1. FVG + EMA 200 Trend Follower
     @staticmethod
     def fvg_ema200_trend(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         htf = df_dict.get('1h')
         if ltf is None or ltf.empty or htf is None or htf.empty: return None
         last_ltf = ltf.iloc[-1]
@@ -49,7 +49,7 @@ class StrategyFactory:
     # 2. Breaker Block + MFI Reversion
     @staticmethod
     def breaker_mfi_reversion(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['SMC_bb_bullish'] and last['SMC_mfi'] < 30:
@@ -63,7 +63,7 @@ class StrategyFactory:
     # 3. Liquidity Sweep + EMA 50 Pullback
     @staticmethod
     def sweep_ema50_pullback(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         lookback = ltf.tail(10)
@@ -78,7 +78,7 @@ class StrategyFactory:
     # 4. Order Block + ATR Volatility Filter
     @staticmethod
     def ob_atr_filtered(df_dict, symbol):
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['SMC_atr'] > ltf['SMC_atr'].rolling(100).mean():
@@ -93,7 +93,7 @@ class StrategyFactory:
     # 5. Silver Bullet + MFI Confluence
     @staticmethod
     def silver_bullet_mfi(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         hour = last['timestamp'].hour
@@ -110,7 +110,7 @@ class StrategyFactory:
     # 6. Unicorn Model (Breaker + FVG)
     @staticmethod
     def unicorn_model(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['SMC_bb_bullish'] and last['SMC_fvg_bullish']:
@@ -124,7 +124,7 @@ class StrategyFactory:
     # 7. Turtle Soup + EMA 200 Rejection
     @staticmethod
     def turtle_soup_ema200(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['SMC_sweep_low'] and last['close'] < last['SMC_ema_200']:
@@ -138,7 +138,7 @@ class StrategyFactory:
     # 8. London Killzone Judas Swing
     @staticmethod
     def london_judas_swing(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         hour = last['timestamp'].hour
@@ -154,7 +154,7 @@ class StrategyFactory:
     # 9. NY AM Continuity (9:30 AM Volatility)
     @staticmethod
     def ny_am_continuity(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         hour = last['timestamp'].hour
@@ -171,7 +171,7 @@ class StrategyFactory:
     # 10. MFI Exhaustion + Order Block
     @staticmethod
     def mfi_exhaustion_ob(df_dict, symbol):
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['SMC_mfi'] < 15 and last['SMC_ob_bullish']:
@@ -185,7 +185,7 @@ class StrategyFactory:
     # 11. EMA 50/200 Golden Cross + FVG
     @staticmethod
     def golden_cross_fvg(df_dict, symbol):
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['SMC_ema_50'] > last['SMC_ema_200'] and last['SMC_fvg_bullish']:
@@ -199,7 +199,7 @@ class StrategyFactory:
     # 12. SMC Liquidity Void + ATR Stretch
     @staticmethod
     def liquidity_void_atr(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['SMC_is_displacement'] and last['SMC_atr'] > ltf['SMC_atr'].rolling(50).mean() * 1.5:
@@ -215,7 +215,7 @@ class StrategyFactory:
     @staticmethod
     def htf_bias_ltf_entry(df_dict, symbol):
         htf = df_dict.get('1h')
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if htf is None or ltf is None or htf.empty or ltf.empty: return None
         last_htf = htf.iloc[-1]
         last_ltf = ltf.iloc[-1]
@@ -230,7 +230,7 @@ class StrategyFactory:
     # 14. Breaker Block Trend Continuation
     @staticmethod
     def bb_trend_continuation(df_dict, symbol):
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['close'] > last['SMC_ema_200'] and last['SMC_bb_bullish']:
@@ -244,7 +244,7 @@ class StrategyFactory:
     # 15. Power of Three
     @staticmethod
     def power_of_three(df_dict, symbol):
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         hour = last['timestamp'].hour
@@ -260,7 +260,7 @@ class StrategyFactory:
     # 16. MFI Divergence + SMC FVG
     @staticmethod
     def mfi_div_fvg(df_dict, symbol):
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         prev = ltf.iloc[-5]
@@ -276,7 +276,7 @@ class StrategyFactory:
     @staticmethod
     def extreme_mfi_displacement(df_dict, symbol):
         htf = df_dict.get('1h')
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if htf is None or ltf is None or htf.empty or ltf.empty: return None
         last_htf = htf.iloc[-1]
         last_ltf = ltf.iloc[-1]
@@ -294,7 +294,7 @@ class StrategyFactory:
     # 18. FVG Retest + EMA 50
     @staticmethod
     def fvg_retest_ema50(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['close'] > last['SMC_ema_50'] and last['SMC_fvg_bullish']:
@@ -308,7 +308,7 @@ class StrategyFactory:
     # 19. ATR Stop Run
     @staticmethod
     def atr_stop_run(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['SMC_sweep_low'] and last['SMC_atr'] > ltf['SMC_atr'].rolling(20).mean() * 1.1:
@@ -323,7 +323,7 @@ class StrategyFactory:
     @staticmethod
     def fvg_trend_reversal(df_dict, symbol):
         htf = df_dict.get('1h')
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if htf is None or ltf is None or htf.empty or ltf.empty: return None
         last_htf = htf.iloc[-1]
         last_ltf = ltf.iloc[-1]
@@ -338,7 +338,7 @@ class StrategyFactory:
     # 21. Reclaimed Breaker
     @staticmethod
     def reclaimed_breaker_mfi(df_dict, symbol):
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['SMC_bb_bullish'] and last['SMC_mfi'] < 45:
@@ -352,7 +352,7 @@ class StrategyFactory:
     # 22. Asian Sweep NY Reversal
     @staticmethod
     def asian_sweep_ny_reversal(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         hour = last['timestamp'].hour
@@ -372,7 +372,7 @@ class StrategyFactory:
     @staticmethod
     def premium_discount_ob(df_dict, symbol):
         htf = df_dict.get('1h')
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if htf is None or ltf is None: return None
         range_high = htf['high'].tail(50).max()
         range_low = htf['low'].tail(50).min()
@@ -389,7 +389,7 @@ class StrategyFactory:
     # 24. IOF Continuation
     @staticmethod
     def iof_continuation_fvg(df_dict, symbol):
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['close'] > last['SMC_ema_50'] and last['SMC_fvg_bullish']:
@@ -403,7 +403,7 @@ class StrategyFactory:
     # 25. Double Bottom Sweep + MSS
     @staticmethod
     def double_bottom_sweep_mss(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         if last['SMC_sweep_low'] and last['SMC_is_displacement']:
@@ -417,7 +417,7 @@ class StrategyFactory:
     # 26. London Open Killzone OB
     @staticmethod
     def london_open_ob(df_dict, symbol):
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         hour = last['timestamp'].hour
@@ -434,7 +434,7 @@ class StrategyFactory:
     @staticmethod
     def mfi_reversal_htf_ema(df_dict, symbol):
         htf = df_dict.get('1h')
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if htf is None or ltf is None: return None
         last_htf = htf.iloc[-1]
         last_ltf = ltf.iloc[-1]
@@ -452,7 +452,7 @@ class StrategyFactory:
     @staticmethod
     def smt_divergence_mfi(df_dict, symbol):
         htf = df_dict.get('1h')
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if htf is None or ltf is None or htf.empty or ltf.empty: return None
         last_htf = htf.iloc[-1]
         last_ltf = ltf.iloc[-1]
@@ -472,7 +472,7 @@ class StrategyFactory:
     # 29. NY Killzone FVG
     @staticmethod
     def ny_killzone_fvg(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         hour = last['timestamp'].hour
@@ -489,7 +489,7 @@ class StrategyFactory:
     @staticmethod
     def ict_2022_model(df_dict, symbol):
         htf = df_dict.get('1h')
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if htf is None or ltf is None: return None
         last_htf = htf.iloc[-1]
         last_ltf = ltf.iloc[-1]
@@ -509,7 +509,7 @@ class StrategyFactory:
     # 32. NY Silver Bullet (10 AM - 11 AM EST)
     @staticmethod
     def ny_silver_bullet(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         # 10:00 - 11:00 AM NY (approx 14:00 - 15:00 UTC)
@@ -527,7 +527,7 @@ class StrategyFactory:
     # 33. Asian Range Sweep + Killzone Reversal
     @staticmethod
     def asian_sweep_kz_reversal(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None or ltf.empty: return None
         last = ltf.iloc[-1]
         hour = last['timestamp'].hour
@@ -546,7 +546,7 @@ class StrategyFactory:
     @staticmethod
     def breaker_trend_pro(df_dict, symbol):
         htf = df_dict.get('1h')
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if htf is None or ltf is None: return None
         last_htf = htf.iloc[-1]
         last_ltf = ltf.iloc[-1]
@@ -566,7 +566,7 @@ class StrategyFactory:
     @staticmethod
     def premium_discount_mss_fvg(df_dict, symbol):
         htf = df_dict.get('1h')
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if htf is None or ltf is None: return None
         last_htf = htf.iloc[-1]
         last_ltf = ltf.iloc[-1]
@@ -586,7 +586,7 @@ class StrategyFactory:
     # 37. London/NY Overlap Sweep (The Power Hour)
     @staticmethod
     def overlap_sweep_reversal(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None: return None
         last = ltf.iloc[-1]
         hour = last['timestamp'].hour
@@ -604,7 +604,7 @@ class StrategyFactory:
     # 38. Turtle Soup + MFI Divergence (Extreme Bottom/Top)
     @staticmethod
     def turtle_soup_mfi_div(df_dict, symbol):
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if ltf is None: return None
         last = ltf.iloc[-1]
         prev = ltf.iloc[-10]
@@ -621,7 +621,7 @@ class StrategyFactory:
     @staticmethod
     def breaker_retest_idm(df_dict, symbol):
         htf = df_dict.get('1h')
-        ltf = df_dict.get('15m')
+        ltf = df_dict.get('15m', df_dict.get('30m'))
         if htf is None or ltf is None: return None
         last_htf = htf.iloc[-1]
         last_ltf = ltf.iloc[-1]
@@ -639,7 +639,7 @@ class StrategyFactory:
     # 40. ICT Macro 2.0 (Time + Price + Displacement)
     @staticmethod
     def ict_macro_strict(df_dict, symbol):
-        ltf = df_dict.get('5m')
+        ltf = df_dict.get('3m', df_dict.get('5m'))
         if ltf is None: return None
         last = ltf.iloc[-1]
         hour = last['timestamp'].hour

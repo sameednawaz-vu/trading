@@ -11,11 +11,11 @@ from ict_agent.data import fetch_ohlcv
 from ict_agent.smc_logic import add_smc_indicators
 
 class StrategyRankingEngine:
-    def __init__(self, assets, timeframes=['1h', '15m', '5m']):
+    def __init__(self, assets, timeframes=['1h', '30m', '15m', '5m', '3m']):
         self.assets = assets
         self.timeframes = timeframes
-        self.state_path = 'e:/TRADING/ranking_state.json'
-        self.leaderboard_path = 'e:/TRADING/strategy_leaderboard.json'
+        self.state_path = './ranking_state.json'
+        self.leaderboard_path = './strategy_leaderboard.json'
         self.load_state()
 
     def load_state(self):
@@ -85,16 +85,16 @@ class StrategyRankingEngine:
                 if df is not None:
                     data_dict[tf] = add_smc_indicators(df)
             
-            if '5m' not in data_dict: continue
+            if '3m' not in data_dict and '5m' not in data_dict: continue
             
-            df_main = data_dict['5m']
+            df_main = data_dict.get('3m', data_dict.get('5m'))
             if start_ts is None: start_ts = df_main.iloc[100]['timestamp']
             
             for i in range(100, len(df_main) - 50):
                 current_time = df_main.iloc[i]['timestamp']
                 end_ts = current_time
                 
-                sliced = {tf: df[df['timestamp'] <= current_time] for tf, df in data_dict.items()}
+                sliced = {tf: df[df['timestamp'] < current_time] for tf, df in data_dict.items()}
                 
                 try:
                     setup = strat_func(sliced, symbol)

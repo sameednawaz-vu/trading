@@ -1,49 +1,54 @@
 import pandas as pd
 import numpy as np
+from smartmoneyconcepts import smc
 
 def add_smc_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     Takes a DataFrame and adds HIGH-PRECISION manual SMC indicators.
+    Uses the smartmoneyconcepts library as requested.
     """
     df = df.copy()
+
+    # SMC expects lowercase columns
     df.columns = [c.lower() for c in df.columns]
-
-    # --- 1. Fair Value Gaps (FVG) ---
-    df['fvg_bullish'] = (df['low'] > df['high'].shift(2)) & (df['close'].shift(1) > df['open'].shift(1))
-    df['fvg_bearish'] = (df['high'] < df['low'].shift(2)) & (df['close'].shift(1) < df['open'].shift(1))
-    df['fvg_top'] = np.where(df['fvg_bullish'], df['low'], np.where(df['fvg_bearish'], df['low'].shift(2), np.nan))
-    df['fvg_bottom'] = np.where(df['fvg_bullish'], df['high'].shift(2), np.where(df['fvg_bearish'], df['high'], np.nan))
     
-    # Forward fill FVGs to keep them active until mitigated
-    df['active_fvg_top'] = df['fvg_top'].ffill()
-    df['active_fvg_bottom'] = df['fvg_bottom'].ffill()
+    # 1. Fair Value Gaps (FVG)
+    fvg = smc.fvg(df)
+    df['fvg_bullish'] = fvg['FVG'] == 1
+    df['fvg_bearish'] = fvg['FVG'] == -1
+    df['fvg_top'] = fvg['Top']
+    df['fvg_bottom'] = fvg['Bottom']
 
-    # --- 2. Swing Points (Trailing Window to remove Lookahead Bias) ---
-    window = 20
-    df['rolling_max'] = df['high'].rolling(window=window).max()
-    df['rolling_min'] = df['low'].rolling(window=window).min()
-    df['is_swing_high'] = df['high'].shift(window//2) == df['rolling_max']
-    df['is_swing_low'] = df['low'].shift(window//2) == df['rolling_min']
-    df['last_swing_high'] = df['high'].where(df['is_swing_high']).ffill()
-    df['last_swing_low'] = df['low'].where(df['is_swing_low']).ffill()
+    # Forward fill FVGs
+    df['active_fvg_top'] = df['fvg_top'].replace(0, np.nan).ffill()
+    df['active_fvg_bottom'] = df['fvg_bottom'].replace(0, np.nan).ffill()
 
-    # --- 3. Liquidity Sweeps ---
+    # 2. Swing Points
+    swings = smc.swing_highs_lows(df)
+    df['is_swing_high'] = swings['HighLow'] == 1
+    df['is_swing_low'] = swings['HighLow'] == -1
+    df['last_swing_high'] = np.where(df['is_swing_high'], df['high'], np.nan)
+    df['last_swing_high'] = pd.Series(df['last_swing_high']).ffill()
+    df['last_swing_low'] = np.where(df['is_swing_low'], df['low'], np.nan)
+    df['last_swing_low'] = pd.Series(df['last_swing_low']).ffill()
+
+    # 3. Liquidity Sweeps
     df['sweep_high'] = (df['high'] > df['last_swing_high'].shift(1)) & (df['close'] < df['last_swing_high'].shift(1))
     df['sweep_low'] = (df['low'] < df['last_swing_low'].shift(1)) & (df['close'] > df['last_swing_low'].shift(1))
 
-    # --- 4. Inducement (IDM) & Displacement ---
+    # 4. Order Blocks (OB)
+    ob = smc.ob(df, swings)
+    df['ob_bullish'] = ob['OB'] == 1
+    df['ob_bearish'] = ob['OB'] == -1
+
+    # 5. Breaker Blocks (BB) (simplified approximation as not in SMC natively or complex)
     df['body_size'] = abs(df['close'] - df['open'])
     df['is_displacement'] = df['body_size'] > df['body_size'].rolling(20).mean() * 2.0
     df['is_idm'] = (df['fvg_bullish'] | df['fvg_bearish']) & df['is_displacement'].shift(1)
-
-    # --- 5. Order Blocks (OB) & Breaker Blocks (BB) ---
-    df['ob_bullish'] = (df['is_displacement']) & (df['close'] > df['open']) & (df['close'].shift(1) < df['open'].shift(1))
-    df['ob_bearish'] = (df['is_displacement']) & (df['close'] < df['open']) & (df['close'].shift(1) > df['open'].shift(1))
-    
     df['bb_bullish'] = (df['high'] > df['high'].where(df['ob_bearish']).ffill()) & df['is_displacement']
     df['bb_bearish'] = (df['low'] < df['low'].where(df['ob_bullish']).ffill()) & df['is_displacement']
 
-    # --- 6. Algorithmic Filters ---
+    # 6. Algorithmic Filters
     df['ema_200'] = df['close'].ewm(span=200, adjust=False).mean()
     df['ema_50'] = df['close'].ewm(span=50, adjust=False).mean()
     
@@ -64,14 +69,14 @@ def add_smc_indicators(df: pd.DataFrame) -> pd.DataFrame:
     mfr = pos_mf_14 / neg_mf_14
     df['mfi'] = 100 - (100 / (1 + mfr))
 
-    # --- 7. Range Statistics (Premium/Discount) ---
+    # 7. Range Statistics (Premium/Discount)
     df['range_100_high'] = df['high'].rolling(100).max()
     df['range_100_low'] = df['low'].rolling(100).min()
     df['mid_point'] = (df['range_100_high'] + df['range_100_low']) / 2
     df['is_discount'] = df['close'] < df['mid_point']
     df['is_premium'] = df['close'] > df['mid_point']
 
-    # --- 8. Session Highs/Lows (Asian Session) ---
+    # 8. Session Highs/Lows (Asian Session)
     df['hour'] = df['timestamp'].dt.hour
     df['is_asian'] = (df['hour'] >= 0) & (df['hour'] < 8)
     df['day'] = df['timestamp'].dt.date
@@ -79,8 +84,10 @@ def add_smc_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df['asian_low'] = df.groupby('day')['low'].transform(lambda x: x.where(df['is_asian']).min()).ffill()
 
     # Clean up
-    df.drop(columns=['rolling_max', 'rolling_min', 'body_size', 'tr', 'hour', 'day', 'is_asian'], inplace=True, errors='ignore')
+    df.drop(columns=['body_size', 'tr', 'hour', 'day', 'is_asian'], inplace=True, errors='ignore')
     df = df.add_prefix('SMC_')
+
+    # Restore original columns
     for col in ['open', 'high', 'low', 'close', 'volume', 'timestamp']:
         if f'SMC_{col}' in df.columns:
             df[col] = df[f'SMC_{col}']

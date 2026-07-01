@@ -1,0 +1,8 @@
+{
+    "status": "INITIALIZING",
+    "current_metrics": {
+        "overall_win_rate": 0,
+        "total_trades": 0,
+        "trades_per_month": 0
+    }
+}

@@ -13,7 +13,7 @@ from ict_agent.data import fetch_ohlcv
 from ict_agent.smc_logic import add_smc_indicators
 
 class RobustBacktester:
-    def __init__(self, assets, initial_balance=10000.0, timeframes=['1h', '15m', '5m']):
+    def __init__(self, assets, initial_balance=10000.0, timeframes=['1h', '30m', '15m', '5m', '3m']):
         self.assets = assets
         self.initial_balance = initial_balance
         self.timeframes = timeframes
@@ -58,15 +58,15 @@ class RobustBacktester:
                 if df is not None:
                     data_dict[tf] = add_smc_indicators(df)
             
-            if '5m' not in data_dict or '1h' not in data_dict: continue
-            df_main = data_dict['5m']
+            if ('3m' not in data_dict and '5m' not in data_dict) or '1h' not in data_dict: continue
+            df_main = data_dict.get('3m', data_dict.get('5m'))
             
             # Start after indicators are warm
             for i in range(250, len(df_main) - 100):
                 current_time = df_main.iloc[i]['timestamp']
                 
                 # Sliced data for the strategy
-                sliced = {tf: df[df['timestamp'] <= current_time] for tf, df in data_dict.items()}
+                sliced = {tf: df[df['timestamp'] < current_time] for tf, df in data_dict.items()}
                 
                 market_regime = self.classify_market(sliced['1h'])
                 
