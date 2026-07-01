@@ -1,0 +1,9 @@
+{
+    "assets": [
+        "BTC/USD", "ETH/USD", "SOL/USD", "BNB/USD", "XRP/USD",
+        "ADA/USD", "DOT/USD", "LINK/USD", "AVAX/USD", "MATIC/USD",
+        "DOGE/USD", "UNI/USD", "LTC/USD", "BCH/USD", "ATOM/USD",
+        "ALGO/USD", "XLM/USD", "VET/USD", "ICP/USD", "FIL/USD",
+        "NEAR/USD", "AAVE/USD", "SAND/USD", "MANA/USD", "EOS/USD"
+    ]
+}
